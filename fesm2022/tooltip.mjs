@@ -142,6 +142,7 @@ class MatTooltip {
     }
     /** The message to be displayed in the tooltip */
     get message() {
+        console.log('Test Output');
         return this._message;
     }
     set message(value) {
