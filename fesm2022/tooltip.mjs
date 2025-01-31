@@ -953,7 +953,10 @@ const matTooltipAnimations = {
     ]),
 };
 
-/** Custom sanitizer that allows <svg> but removes dangerous content */
+/**
+ * Custom sanitizer that allows &lt;svg&gt; but removes dangerous content
+ * @docs-private
+ */
 class TooltipSanitizer extends DomSanitizer {
     constructor() {
         super();
@@ -961,13 +964,13 @@ class TooltipSanitizer extends DomSanitizer {
     /** Main sanitization function */
     sanitize(context, value) {
         if (context === SecurityContext.HTML && typeof value === 'string') {
-            return this.sanitizeTooltipHtml(value);
+            return this._sanitizeTooltipHtml(value);
         }
         return value;
     }
-    /** Function to sanitize HTML while keeping <svg> */
-    sanitizeTooltipHtml(html) {
-        // Remove <script>, <iframe>, <object>, <embed>, <form>, <style>, <meta>, <link>, <base>
+    /** Function to sanitize HTML while keeping &lt;svg&gt; */
+    _sanitizeTooltipHtml(html) {
+        /** Remove &lt;script&gt;, &lt;iframe&gt;, &lt;object&gt;, &lt;embed&gt;, &lt;form&gt;, &lt;style&gt;, &lt;meta&gt;, &lt;link&gt;, &lt;base&gt; */
         html = html.replace(/<(script|iframe|object|embed|form|meta|style|link|base)[^>]*>[\s\S]*?<\/\1>/gi, '');
         // Remove dangerous attributes (onX events, javascript: links)
         html = html.replace(/\son\w+="[^"]*"/gi, ''); // Remove event handlers (e.g., onclick)
