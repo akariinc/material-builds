@@ -5,6 +5,7 @@ import { BooleanInput } from '@angular/cdk/coercion';
 import { ChangeDetectorRef } from '@angular/core';
 import { ConnectedPosition } from '@angular/cdk/overlay';
 import { Directionality } from '@angular/cdk/bidi';
+import { DomSanitizer } from '@angular/platform-browser';
 import { ElementRef } from '@angular/core';
 import { FocusMonitor } from '@angular/cdk/a11y';
 import * as i0 from '@angular/core';
@@ -18,11 +19,13 @@ import { NgZone } from '@angular/core';
 import { NumberInput } from '@angular/cdk/coercion';
 import { Observable } from 'rxjs';
 import { OnDestroy } from '@angular/core';
+import { OnInit } from '@angular/core';
 import { OriginConnectionPosition } from '@angular/cdk/overlay';
 import { Overlay } from '@angular/cdk/overlay';
 import { OverlayConnectionPosition } from '@angular/cdk/overlay';
 import { OverlayRef } from '@angular/cdk/overlay';
 import { Platform } from '@angular/cdk/platform';
+import { Renderer2 } from '@angular/core';
 import { ScrollDispatcher } from '@angular/cdk/overlay';
 import { ScrollStrategy } from '@angular/cdk/overlay';
 import { ViewContainerRef } from '@angular/core';
@@ -88,6 +91,7 @@ export declare class MatTooltip implements OnDestroy, AfterViewInit {
     private _focusMonitor;
     protected _dir: Directionality;
     private _defaultOptions;
+    private _sanitizer;
     _overlayRef: OverlayRef | null;
     _tooltipInstance: TooltipComponent | null;
     private _portal;
@@ -158,7 +162,7 @@ export declare class MatTooltip implements OnDestroy, AfterViewInit {
     /** Emits when the component is destroyed. */
     private readonly _destroyed;
     private _injector;
-    constructor(_overlay: Overlay, _elementRef: ElementRef<HTMLElement>, _scrollDispatcher: ScrollDispatcher, _viewContainerRef: ViewContainerRef, _ngZone: NgZone, _platform: Platform, _ariaDescriber: AriaDescriber, _focusMonitor: FocusMonitor, scrollStrategy: any, _dir: Directionality, _defaultOptions: MatTooltipDefaultOptions, _document: any);
+    constructor(_overlay: Overlay, _elementRef: ElementRef<HTMLElement>, _scrollDispatcher: ScrollDispatcher, _viewContainerRef: ViewContainerRef, _ngZone: NgZone, _platform: Platform, _ariaDescriber: AriaDescriber, _focusMonitor: FocusMonitor, scrollStrategy: any, _dir: Directionality, _defaultOptions: MatTooltipDefaultOptions, _document: any, _sanitizer: DomSanitizer);
     ngAfterViewInit(): void;
     /**
      * Dispose the tooltip when destroyed.
@@ -218,7 +222,7 @@ export declare class MatTooltip implements OnDestroy, AfterViewInit {
     private _disableNativeGesturesIfNecessary;
     /** Updates the tooltip's ARIA description based on it current state. */
     private _syncAriaDescription;
-    static ɵfac: i0.ɵɵFactoryDeclaration<MatTooltip, [null, null, null, null, null, null, null, null, null, null, { optional: true; }, null]>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<MatTooltip, [null, null, null, null, null, null, null, null, null, null, { optional: true; }, null, null]>;
     static ɵdir: i0.ɵɵDirectiveDeclaration<MatTooltip, "[matTooltip]", ["matTooltip"], { "position": { "alias": "matTooltipPosition"; "required": false; }; "positionAtOrigin": { "alias": "matTooltipPositionAtOrigin"; "required": false; }; "disabled": { "alias": "matTooltipDisabled"; "required": false; }; "showDelay": { "alias": "matTooltipShowDelay"; "required": false; }; "hideDelay": { "alias": "matTooltipHideDelay"; "required": false; }; "touchGestures": { "alias": "matTooltipTouchGestures"; "required": false; }; "message": { "alias": "matTooltip"; "required": false; }; "tooltipClass": { "alias": "matTooltipClass"; "required": false; }; }, {}, never, never, true, never>;
 }
 
@@ -278,9 +282,10 @@ export declare const TOOLTIP_PANEL_CLASS = "mat-mdc-tooltip-panel";
  * Internal component that wraps the tooltip's content.
  * @docs-private
  */
-export declare class TooltipComponent implements OnDestroy {
+export declare class TooltipComponent implements OnInit, OnDestroy {
     private _changeDetectorRef;
     protected _elementRef: ElementRef<HTMLElement>;
+    private _renderer;
     _isMultiline: boolean;
     /** Message to display in the tooltip */
     message: string;
@@ -300,6 +305,8 @@ export declare class TooltipComponent implements OnDestroy {
     private _animationsDisabled;
     /** Reference to the internal tooltip element. */
     _tooltip: ElementRef<HTMLElement>;
+    /** Reference to the host element of the tooltip content container. */
+    _container: ElementRef<HTMLElement>;
     /** Whether interactions on the page should close the tooltip */
     private _closeOnInteraction;
     /** Whether the tooltip is currently visible. */
@@ -310,7 +317,7 @@ export declare class TooltipComponent implements OnDestroy {
     private readonly _showAnimation;
     /** Name of the hide animation and the class that toggles it. */
     private readonly _hideAnimation;
-    constructor(_changeDetectorRef: ChangeDetectorRef, _elementRef: ElementRef<HTMLElement>, animationMode?: string);
+    constructor(_changeDetectorRef: ChangeDetectorRef, _elementRef: ElementRef<HTMLElement>, _renderer: Renderer2, animationMode?: string);
     /**
      * Shows the tooltip with an animation originating from the provided origin
      * @param delay Amount of milliseconds to the delay showing the tooltip.
@@ -325,6 +332,7 @@ export declare class TooltipComponent implements OnDestroy {
     afterHidden(): Observable<void>;
     /** Whether the tooltip is being displayed. */
     isVisible(): boolean;
+    ngOnInit(): void;
     ngOnDestroy(): void;
     /**
      * Interactions on the HTML body should close the tooltip immediately as defined in the
@@ -355,7 +363,7 @@ export declare class TooltipComponent implements OnDestroy {
     private _finalizeAnimation;
     /** Toggles the visibility of the tooltip element. */
     private _toggleVisibility;
-    static ɵfac: i0.ɵɵFactoryDeclaration<TooltipComponent, [null, null, { optional: true; }]>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<TooltipComponent, [null, null, null, { optional: true; }]>;
     static ɵcmp: i0.ɵɵComponentDeclaration<TooltipComponent, "mat-tooltip-component", never, {}, {}, never, never, true, never>;
 }
 
