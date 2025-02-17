@@ -18,6 +18,7 @@ import { InjectionToken } from '@angular/core';
 import { NgZone } from '@angular/core';
 import { NumberInput } from '@angular/cdk/coercion';
 import { Observable } from 'rxjs';
+import { OnChanges } from '@angular/core';
 import { OnDestroy } from '@angular/core';
 import { OnInit } from '@angular/core';
 import { OriginConnectionPosition } from '@angular/cdk/overlay';
@@ -28,6 +29,7 @@ import { Platform } from '@angular/cdk/platform';
 import { Renderer2 } from '@angular/core';
 import { ScrollDispatcher } from '@angular/cdk/overlay';
 import { ScrollStrategy } from '@angular/cdk/overlay';
+import { SimpleChanges } from '@angular/core';
 import { ViewContainerRef } from '@angular/core';
 
 /**
@@ -80,7 +82,7 @@ export declare const MAT_TOOLTIP_SCROLL_STRATEGY_FACTORY_PROVIDER: {
  *
  * https://material.io/design/components/tooltips.html
  */
-export declare class MatTooltip implements OnDestroy, AfterViewInit {
+export declare class MatTooltip implements OnChanges, OnDestroy, AfterViewInit {
     private _overlay;
     private _elementRef;
     private _scrollDispatcher;
@@ -164,6 +166,7 @@ export declare class MatTooltip implements OnDestroy, AfterViewInit {
     private _injector;
     constructor(_overlay: Overlay, _elementRef: ElementRef<HTMLElement>, _scrollDispatcher: ScrollDispatcher, _viewContainerRef: ViewContainerRef, _ngZone: NgZone, _platform: Platform, _ariaDescriber: AriaDescriber, _focusMonitor: FocusMonitor, scrollStrategy: any, _dir: Directionality, _defaultOptions: MatTooltipDefaultOptions, _document: any, _sanitizer: DomSanitizer);
     ngAfterViewInit(): void;
+    ngOnChanges(changes: SimpleChanges): void;
     /**
      * Dispose the tooltip when destroyed.
      */
