@@ -5,7 +5,6 @@ import { BooleanInput } from '@angular/cdk/coercion';
 import { ChangeDetectorRef } from '@angular/core';
 import { ConnectedPosition } from '@angular/cdk/overlay';
 import { Directionality } from '@angular/cdk/bidi';
-import { DomSanitizer } from '@angular/platform-browser';
 import { ElementRef } from '@angular/core';
 import { FocusMonitor } from '@angular/cdk/a11y';
 import * as i0 from '@angular/core';
@@ -26,10 +25,8 @@ import { Overlay } from '@angular/cdk/overlay';
 import { OverlayConnectionPosition } from '@angular/cdk/overlay';
 import { OverlayRef } from '@angular/cdk/overlay';
 import { Platform } from '@angular/cdk/platform';
-import { SafeHtml } from '@angular/platform-browser';
 import { ScrollDispatcher } from '@angular/cdk/overlay';
 import { ScrollStrategy } from '@angular/cdk/overlay';
-import { SecurityContext } from '@angular/core';
 import { SimpleChanges } from '@angular/core';
 import { ViewContainerRef } from '@angular/core';
 
@@ -94,7 +91,6 @@ export declare class MatTooltip implements OnChanges, OnDestroy, AfterViewInit {
     private _focusMonitor;
     protected _dir: Directionality;
     private _defaultOptions;
-    private _customSanitizer;
     _overlayRef: OverlayRef | null;
     _tooltipInstance: TooltipComponent | null;
     private _portal;
@@ -165,7 +161,7 @@ export declare class MatTooltip implements OnChanges, OnDestroy, AfterViewInit {
     /** Emits when the component is destroyed. */
     private readonly _destroyed;
     private _injector;
-    constructor(_overlay: Overlay, _elementRef: ElementRef<HTMLElement>, _scrollDispatcher: ScrollDispatcher, _viewContainerRef: ViewContainerRef, _ngZone: NgZone, _platform: Platform, _ariaDescriber: AriaDescriber, _focusMonitor: FocusMonitor, scrollStrategy: any, _dir: Directionality, _defaultOptions: MatTooltipDefaultOptions, _document: any, _customSanitizer: TooltipCustomSanitizer);
+    constructor(_overlay: Overlay, _elementRef: ElementRef<HTMLElement>, _scrollDispatcher: ScrollDispatcher, _viewContainerRef: ViewContainerRef, _ngZone: NgZone, _platform: Platform, _ariaDescriber: AriaDescriber, _focusMonitor: FocusMonitor, scrollStrategy: any, _dir: Directionality, _defaultOptions: MatTooltipDefaultOptions, _document: any);
     ngAfterViewInit(): void;
     ngOnChanges(changes: SimpleChanges): void;
     /**
@@ -226,7 +222,7 @@ export declare class MatTooltip implements OnChanges, OnDestroy, AfterViewInit {
     private _disableNativeGesturesIfNecessary;
     /** Updates the tooltip's ARIA description based on it current state. */
     private _syncAriaDescription;
-    static ɵfac: i0.ɵɵFactoryDeclaration<MatTooltip, [null, null, null, null, null, null, null, null, null, null, { optional: true; }, null, null]>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<MatTooltip, [null, null, null, null, null, null, null, null, null, null, { optional: true; }, null]>;
     static ɵdir: i0.ɵɵDirectiveDeclaration<MatTooltip, "[matTooltip]", ["matTooltip"], { "position": { "alias": "matTooltipPosition"; "required": false; }; "positionAtOrigin": { "alias": "matTooltipPositionAtOrigin"; "required": false; }; "disabled": { "alias": "matTooltipDisabled"; "required": false; }; "showDelay": { "alias": "matTooltipShowDelay"; "required": false; }; "hideDelay": { "alias": "matTooltipHideDelay"; "required": false; }; "touchGestures": { "alias": "matTooltipTouchGestures"; "required": false; }; "message": { "alias": "matTooltip"; "required": false; }; "tooltipClass": { "alias": "matTooltipClass"; "required": false; }; }, {}, never, never, true, never>;
 }
 
@@ -368,26 +364,6 @@ export declare class TooltipComponent implements OnInit, OnDestroy {
     private _toggleVisibility;
     static ɵfac: i0.ɵɵFactoryDeclaration<TooltipComponent, [null, null, { optional: true; }]>;
     static ɵcmp: i0.ɵɵComponentDeclaration<TooltipComponent, "mat-tooltip-component", never, {}, {}, never, never, true, never>;
-}
-
-/**
- * Custom sanitizer that allows &lt;svg&gt; but removes dangerous content
- * @docs-private
- */
-declare class TooltipCustomSanitizer extends DomSanitizer {
-    constructor();
-    /** Main sanitization function */
-    sanitize(context: SecurityContext, value: string | null): string | null;
-    /** Function to sanitize HTML while keeping &lt;svg&gt; */
-    private _sanitizeHtml;
-    /** Bypass security trust for safe HTML */
-    bypassSecurityTrustHtml(value: string): SafeHtml;
-    bypassSecurityTrustStyle(value: string): SafeHtml;
-    bypassSecurityTrustScript(value: string): SafeHtml;
-    bypassSecurityTrustUrl(value: string): SafeHtml;
-    bypassSecurityTrustResourceUrl(value: string): SafeHtml;
-    static ɵfac: i0.ɵɵFactoryDeclaration<TooltipCustomSanitizer, never>;
-    static ɵprov: i0.ɵɵInjectableDeclaration<TooltipCustomSanitizer>;
 }
 
 /** Possible positions for a tooltip. */
