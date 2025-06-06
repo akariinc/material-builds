@@ -26,9 +26,10 @@ import { Overlay } from '@angular/cdk/overlay';
 import { OverlayConnectionPosition } from '@angular/cdk/overlay';
 import { OverlayRef } from '@angular/cdk/overlay';
 import { Platform } from '@angular/cdk/platform';
-import { Renderer2 } from '@angular/core';
+import { SafeHtml } from '@angular/platform-browser';
 import { ScrollDispatcher } from '@angular/cdk/overlay';
 import { ScrollStrategy } from '@angular/cdk/overlay';
+import { SecurityContext } from '@angular/core';
 import { SimpleChanges } from '@angular/core';
 import { ViewContainerRef } from '@angular/core';
 
@@ -93,7 +94,7 @@ export declare class MatTooltip implements OnChanges, OnDestroy, AfterViewInit {
     private _focusMonitor;
     protected _dir: Directionality;
     private _defaultOptions;
-    private _sanitizer;
+    private _customSanitizer;
     _overlayRef: OverlayRef | null;
     _tooltipInstance: TooltipComponent | null;
     private _portal;
@@ -164,7 +165,7 @@ export declare class MatTooltip implements OnChanges, OnDestroy, AfterViewInit {
     /** Emits when the component is destroyed. */
     private readonly _destroyed;
     private _injector;
-    constructor(_overlay: Overlay, _elementRef: ElementRef<HTMLElement>, _scrollDispatcher: ScrollDispatcher, _viewContainerRef: ViewContainerRef, _ngZone: NgZone, _platform: Platform, _ariaDescriber: AriaDescriber, _focusMonitor: FocusMonitor, scrollStrategy: any, _dir: Directionality, _defaultOptions: MatTooltipDefaultOptions, _document: any, _sanitizer: DomSanitizer);
+    constructor(_overlay: Overlay, _elementRef: ElementRef<HTMLElement>, _scrollDispatcher: ScrollDispatcher, _viewContainerRef: ViewContainerRef, _ngZone: NgZone, _platform: Platform, _ariaDescriber: AriaDescriber, _focusMonitor: FocusMonitor, scrollStrategy: any, _dir: Directionality, _defaultOptions: MatTooltipDefaultOptions, _document: any, _customSanitizer: TooltipCustomSanitizer);
     ngAfterViewInit(): void;
     ngOnChanges(changes: SimpleChanges): void;
     /**
@@ -288,7 +289,6 @@ export declare const TOOLTIP_PANEL_CLASS = "mat-mdc-tooltip-panel";
 export declare class TooltipComponent implements OnInit, OnDestroy {
     private _changeDetectorRef;
     protected _elementRef: ElementRef<HTMLElement>;
-    private _renderer;
     _isMultiline: boolean;
     /** Message to display in the tooltip */
     message: string;
@@ -320,7 +320,7 @@ export declare class TooltipComponent implements OnInit, OnDestroy {
     private readonly _showAnimation;
     /** Name of the hide animation and the class that toggles it. */
     private readonly _hideAnimation;
-    constructor(_changeDetectorRef: ChangeDetectorRef, _elementRef: ElementRef<HTMLElement>, _renderer: Renderer2, animationMode?: string);
+    constructor(_changeDetectorRef: ChangeDetectorRef, _elementRef: ElementRef<HTMLElement>, animationMode?: string);
     /**
      * Shows the tooltip with an animation originating from the provided origin
      * @param delay Amount of milliseconds to the delay showing the tooltip.
@@ -366,8 +366,28 @@ export declare class TooltipComponent implements OnInit, OnDestroy {
     private _finalizeAnimation;
     /** Toggles the visibility of the tooltip element. */
     private _toggleVisibility;
-    static ɵfac: i0.ɵɵFactoryDeclaration<TooltipComponent, [null, null, null, { optional: true; }]>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<TooltipComponent, [null, null, { optional: true; }]>;
     static ɵcmp: i0.ɵɵComponentDeclaration<TooltipComponent, "mat-tooltip-component", never, {}, {}, never, never, true, never>;
+}
+
+/**
+ * Custom sanitizer that allows &lt;svg&gt; but removes dangerous content
+ * @docs-private
+ */
+declare class TooltipCustomSanitizer extends DomSanitizer {
+    constructor();
+    /** Main sanitization function */
+    sanitize(context: SecurityContext, value: string | null): string | null;
+    /** Function to sanitize HTML while keeping &lt;svg&gt; */
+    private _sanitizeHtml;
+    /** Bypass security trust for safe HTML */
+    bypassSecurityTrustHtml(value: string): SafeHtml;
+    bypassSecurityTrustStyle(value: string): SafeHtml;
+    bypassSecurityTrustScript(value: string): SafeHtml;
+    bypassSecurityTrustUrl(value: string): SafeHtml;
+    bypassSecurityTrustResourceUrl(value: string): SafeHtml;
+    static ɵfac: i0.ɵɵFactoryDeclaration<TooltipCustomSanitizer, never>;
+    static ɵprov: i0.ɵɵInjectableDeclaration<TooltipCustomSanitizer>;
 }
 
 /** Possible positions for a tooltip. */
