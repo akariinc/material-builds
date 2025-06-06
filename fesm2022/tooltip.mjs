@@ -2,7 +2,7 @@ import { takeUntil } from 'rxjs/operators';
 import { coerceBooleanProperty, coerceNumberProperty } from '@angular/cdk/coercion';
 import { ESCAPE, hasModifierKey } from '@angular/cdk/keycodes';
 import * as i0 from '@angular/core';
-import { InjectionToken, inject, SecurityContext, Injector, ElementRef, afterNextRender, Directive, Inject, Optional, Input, ANIMATION_MODULE_TYPE, Component, ViewEncapsulation, ChangeDetectionStrategy, ViewChild, Injectable, NgModule } from '@angular/core';
+import { SecurityContext, Injectable, InjectionToken, inject, Injector, ElementRef, afterNextRender, Directive, Inject, Optional, Input, ANIMATION_MODULE_TYPE, Component, ViewEncapsulation, ChangeDetectionStrategy, ViewChild, NgModule } from '@angular/core';
 import { DOCUMENT, NgClass, CommonModule } from '@angular/common';
 import * as i2 from '@angular/cdk/platform';
 import { normalizePassiveListenerOptions } from '@angular/cdk/platform';
@@ -18,6 +18,55 @@ import { DomSanitizer } from '@angular/platform-browser';
 import { trigger, state, style, transition, animate } from '@angular/animations';
 import { CdkScrollableModule } from '@angular/cdk/scrolling';
 import { MatCommonModule } from '@angular/material/core';
+
+/**
+ * Custom sanitizer that allows &lt;svg&gt; but removes dangerous content
+ * @docs-private
+ */
+class TooltipCustomSanitizer extends DomSanitizer {
+    constructor() {
+        super();
+    }
+    /** Main sanitization function */
+    sanitize(context, value) {
+        if (context === SecurityContext.HTML && typeof value === 'string') {
+            return this._sanitizeHtml(value);
+        }
+        return value;
+    }
+    /** Function to sanitize HTML while keeping &lt;svg&gt; */
+    _sanitizeHtml(html) {
+        /** Remove &lt;script&gt;, &lt;iframe&gt;, &lt;object&gt;, &lt;embed&gt;, &lt;form&gt;, &lt;style&gt;, &lt;meta&gt;, &lt;link&gt;, &lt;base&gt; */
+        html = html.replace(/<(script|iframe|object|embed|form|meta|style|link|base)[^>]*>[\s\S]*?<\/\1>/gi, '');
+        // Remove dangerous attributes (onX events, javascript: links)
+        html = html.replace(/\son\w+="[^"]*"/gi, ''); // Remove event handlers (e.g., onclick)
+        html = html.replace(/\son\w+='[^']*'/gi, ''); // Remove event handlers (single quotes)
+        html = html.replace(/\shref=['"](javascript:)[^'"]*['"]/gi, 'href="#"'); // Prevent javascript: links
+        html = html.replace(/\ssrc=['"](javascript:)[^'"]*['"]/gi, ''); // Prevent javascript: in src
+        return html;
+    }
+    /** Bypass security trust for safe HTML */
+    bypassSecurityTrustHtml(value) {
+        return value;
+    }
+    bypassSecurityTrustStyle(value) {
+        return value;
+    }
+    bypassSecurityTrustScript(value) {
+        return value;
+    }
+    bypassSecurityTrustUrl(value) {
+        return value;
+    }
+    bypassSecurityTrustResourceUrl(value) {
+        return value;
+    }
+    static { this.ɵfac = i0.ɵɵngDeclareFactory({ minVersion: "12.0.0", version: "18.2.0-next.2", ngImport: i0, type: TooltipCustomSanitizer, deps: [], target: i0.ɵɵFactoryTarget.Injectable }); }
+    static { this.ɵprov = i0.ɵɵngDeclareInjectable({ minVersion: "12.0.0", version: "18.2.0-next.2", ngImport: i0, type: TooltipCustomSanitizer }); }
+}
+i0.ɵɵngDeclareClassMetadata({ minVersion: "12.0.0", version: "18.2.0-next.2", ngImport: i0, type: TooltipCustomSanitizer, decorators: [{
+            type: Injectable
+        }], ctorParameters: () => [] });
 
 /** Time in ms to throttle repositioning after scroll events. */
 const SCROLL_THROTTLE_MS = 20;
@@ -701,7 +750,7 @@ class MatTooltip {
         });
     }
     static { this.ɵfac = i0.ɵɵngDeclareFactory({ minVersion: "12.0.0", version: "18.2.0-next.2", ngImport: i0, type: MatTooltip, deps: [{ token: i1.Overlay }, { token: i0.ElementRef }, { token: i1.ScrollDispatcher }, { token: i0.ViewContainerRef }, { token: i0.NgZone }, { token: i2.Platform }, { token: i3.AriaDescriber }, { token: i3.FocusMonitor }, { token: MAT_TOOLTIP_SCROLL_STRATEGY }, { token: i4.Directionality }, { token: MAT_TOOLTIP_DEFAULT_OPTIONS, optional: true }, { token: DOCUMENT }, { token: i5.DomSanitizer }], target: i0.ɵɵFactoryTarget.Directive }); }
-    static { this.ɵdir = i0.ɵɵngDeclareDirective({ minVersion: "14.0.0", version: "18.2.0-next.2", type: MatTooltip, isStandalone: true, selector: "[matTooltip]", inputs: { position: ["matTooltipPosition", "position"], positionAtOrigin: ["matTooltipPositionAtOrigin", "positionAtOrigin"], disabled: ["matTooltipDisabled", "disabled"], showDelay: ["matTooltipShowDelay", "showDelay"], hideDelay: ["matTooltipHideDelay", "hideDelay"], touchGestures: ["matTooltipTouchGestures", "touchGestures"], message: ["matTooltip", "message"], tooltipClass: ["matTooltipClass", "tooltipClass"] }, host: { properties: { "class.mat-mdc-tooltip-disabled": "disabled" }, classAttribute: "mat-mdc-tooltip-trigger" }, exportAs: ["matTooltip"], usesOnChanges: true, ngImport: i0 }); }
+    static { this.ɵdir = i0.ɵɵngDeclareDirective({ minVersion: "14.0.0", version: "18.2.0-next.2", type: MatTooltip, isStandalone: true, selector: "[matTooltip]", inputs: { position: ["matTooltipPosition", "position"], positionAtOrigin: ["matTooltipPositionAtOrigin", "positionAtOrigin"], disabled: ["matTooltipDisabled", "disabled"], showDelay: ["matTooltipShowDelay", "showDelay"], hideDelay: ["matTooltipHideDelay", "hideDelay"], touchGestures: ["matTooltipTouchGestures", "touchGestures"], message: ["matTooltip", "message"], tooltipClass: ["matTooltipClass", "tooltipClass"] }, host: { properties: { "class.mat-mdc-tooltip-disabled": "disabled" }, classAttribute: "mat-mdc-tooltip-trigger" }, providers: [{ provide: DomSanitizer, useClass: TooltipCustomSanitizer }], exportAs: ["matTooltip"], usesOnChanges: true, ngImport: i0 }); }
 }
 i0.ɵɵngDeclareClassMetadata({ minVersion: "12.0.0", version: "18.2.0-next.2", ngImport: i0, type: MatTooltip, decorators: [{
             type: Directive,
@@ -713,6 +762,7 @@ i0.ɵɵngDeclareClassMetadata({ minVersion: "12.0.0", version: "18.2.0-next.2", 
                         '[class.mat-mdc-tooltip-disabled]': 'disabled',
                     },
                     standalone: true,
+                    providers: [{ provide: DomSanitizer, useClass: TooltipCustomSanitizer }],
                 }]
         }], ctorParameters: () => [{ type: i1.Overlay }, { type: i0.ElementRef }, { type: i1.ScrollDispatcher }, { type: i0.ViewContainerRef }, { type: i0.NgZone }, { type: i2.Platform }, { type: i3.AriaDescriber }, { type: i3.FocusMonitor }, { type: undefined, decorators: [{
                     type: Inject,
@@ -958,72 +1008,17 @@ const matTooltipAnimations = {
     ]),
 };
 
-/**
- * Custom sanitizer that allows &lt;svg&gt; but removes dangerous content
- * @docs-private
- */
-class TooltipCustomSanitizer extends DomSanitizer {
-    constructor() {
-        super();
-    }
-    /** Main sanitization function */
-    sanitize(context, value) {
-        if (context === SecurityContext.HTML && typeof value === 'string') {
-            return this._sanitizeHtml(value);
-        }
-        return value;
-    }
-    /** Function to sanitize HTML while keeping &lt;svg&gt; */
-    _sanitizeHtml(html) {
-        /** Remove &lt;script&gt;, &lt;iframe&gt;, &lt;object&gt;, &lt;embed&gt;, &lt;form&gt;, &lt;style&gt;, &lt;meta&gt;, &lt;link&gt;, &lt;base&gt; */
-        html = html.replace(/<(script|iframe|object|embed|form|meta|style|link|base)[^>]*>[\s\S]*?<\/\1>/gi, '');
-        // Remove dangerous attributes (onX events, javascript: links)
-        html = html.replace(/\son\w+="[^"]*"/gi, ''); // Remove event handlers (e.g., onclick)
-        html = html.replace(/\son\w+='[^']*'/gi, ''); // Remove event handlers (single quotes)
-        html = html.replace(/\shref=['"](javascript:)[^'"]*['"]/gi, 'href="#"'); // Prevent javascript: links
-        html = html.replace(/\ssrc=['"](javascript:)[^'"]*['"]/gi, ''); // Prevent javascript: in src
-        return html;
-    }
-    /** Bypass security trust for safe HTML */
-    bypassSecurityTrustHtml(value) {
-        return value;
-    }
-    bypassSecurityTrustStyle(value) {
-        return value;
-    }
-    bypassSecurityTrustScript(value) {
-        return value;
-    }
-    bypassSecurityTrustUrl(value) {
-        return value;
-    }
-    bypassSecurityTrustResourceUrl(value) {
-        return value;
-    }
-    static { this.ɵfac = i0.ɵɵngDeclareFactory({ minVersion: "12.0.0", version: "18.2.0-next.2", ngImport: i0, type: TooltipCustomSanitizer, deps: [], target: i0.ɵɵFactoryTarget.Injectable }); }
-    static { this.ɵprov = i0.ɵɵngDeclareInjectable({ minVersion: "12.0.0", version: "18.2.0-next.2", ngImport: i0, type: TooltipCustomSanitizer }); }
-}
-i0.ɵɵngDeclareClassMetadata({ minVersion: "12.0.0", version: "18.2.0-next.2", ngImport: i0, type: TooltipCustomSanitizer, decorators: [{
-            type: Injectable
-        }], ctorParameters: () => [] });
-
 class MatTooltipModule {
     static { this.ɵfac = i0.ɵɵngDeclareFactory({ minVersion: "12.0.0", version: "18.2.0-next.2", ngImport: i0, type: MatTooltipModule, deps: [], target: i0.ɵɵFactoryTarget.NgModule }); }
     static { this.ɵmod = i0.ɵɵngDeclareNgModule({ minVersion: "14.0.0", version: "18.2.0-next.2", ngImport: i0, type: MatTooltipModule, imports: [A11yModule, CommonModule, OverlayModule, MatCommonModule, MatTooltip, TooltipComponent], exports: [MatTooltip, TooltipComponent, MatCommonModule, CdkScrollableModule] }); }
-    static { this.ɵinj = i0.ɵɵngDeclareInjector({ minVersion: "12.0.0", version: "18.2.0-next.2", ngImport: i0, type: MatTooltipModule, providers: [
-            MAT_TOOLTIP_SCROLL_STRATEGY_FACTORY_PROVIDER,
-            { provide: DomSanitizer, useClass: TooltipCustomSanitizer },
-        ], imports: [A11yModule, CommonModule, OverlayModule, MatCommonModule, MatCommonModule, CdkScrollableModule] }); }
+    static { this.ɵinj = i0.ɵɵngDeclareInjector({ minVersion: "12.0.0", version: "18.2.0-next.2", ngImport: i0, type: MatTooltipModule, providers: [MAT_TOOLTIP_SCROLL_STRATEGY_FACTORY_PROVIDER], imports: [A11yModule, CommonModule, OverlayModule, MatCommonModule, MatCommonModule, CdkScrollableModule] }); }
 }
 i0.ɵɵngDeclareClassMetadata({ minVersion: "12.0.0", version: "18.2.0-next.2", ngImport: i0, type: MatTooltipModule, decorators: [{
             type: NgModule,
             args: [{
                     imports: [A11yModule, CommonModule, OverlayModule, MatCommonModule, MatTooltip, TooltipComponent],
                     exports: [MatTooltip, TooltipComponent, MatCommonModule, CdkScrollableModule],
-                    providers: [
-                        MAT_TOOLTIP_SCROLL_STRATEGY_FACTORY_PROVIDER,
-                        { provide: DomSanitizer, useClass: TooltipCustomSanitizer },
-                    ],
+                    providers: [MAT_TOOLTIP_SCROLL_STRATEGY_FACTORY_PROVIDER],
                 }]
         }] });
 
