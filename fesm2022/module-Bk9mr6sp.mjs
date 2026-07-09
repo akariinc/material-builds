@@ -119,7 +119,7 @@ const sanitizeChildren = (node) => {
             const element = child;
             if (!ALLOWED_ELEMENTS.has(element.nodeName.toLowerCase())) {
                 // Drop disallowed elements entirely, including their subtree.
-                node.removeChild(child);
+                element.remove();
                 continue;
             }
             sanitizeAttributes(element);
@@ -127,7 +127,7 @@ const sanitizeChildren = (node) => {
         }
         else if (child.nodeType !== 3 /* TEXT_NODE */) {
             // Remove comments, CDATA and processing instructions — all are mXSS vectors.
-            node.removeChild(child);
+            child.remove();
         }
     }
 };
@@ -1140,4 +1140,4 @@ i0.ɵɵngDeclareClassMetadata({ minVersion: "12.0.0", version: "19.2.6", ngImpor
         }] });
 
 export { MAT_TOOLTIP_SCROLL_STRATEGY as M, SCROLL_THROTTLE_MS as S, TOOLTIP_PANEL_CLASS as T, MAT_TOOLTIP_SCROLL_STRATEGY_FACTORY as a, MAT_TOOLTIP_SCROLL_STRATEGY_FACTORY_PROVIDER as b, MAT_TOOLTIP_DEFAULT_OPTIONS_FACTORY as c, MAT_TOOLTIP_DEFAULT_OPTIONS as d, MatTooltip as e, TooltipComponent as f, getMatTooltipInvalidPositionError as g, MatTooltipModule as h };
-//# sourceMappingURL=module-wHeZIiiY.mjs.map
+//# sourceMappingURL=module-Bk9mr6sp.mjs.map
