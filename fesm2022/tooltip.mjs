@@ -123,7 +123,7 @@ const sanitizeChildren = (node) => {
             const element = child;
             if (!ALLOWED_ELEMENTS.has(element.nodeName.toLowerCase())) {
                 // Drop disallowed elements entirely, including their subtree.
-                node.removeChild(child);
+                element.remove();
                 continue;
             }
             sanitizeAttributes(element);
@@ -131,7 +131,7 @@ const sanitizeChildren = (node) => {
         }
         else if (child.nodeType !== 3 /* TEXT_NODE */) {
             // Remove comments, CDATA and processing instructions — all are mXSS vectors.
-            node.removeChild(child);
+            child.remove();
         }
     }
 };
