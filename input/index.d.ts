@@ -1,59 +1,29 @@
-import { AfterViewInit } from '@angular/core';
 import { BooleanInput } from '@angular/cdk/coercion';
-import { DoCheck } from '@angular/core';
-import { ElementRef } from '@angular/core';
-import { ErrorStateMatcher } from '@angular/material/core';
-import * as i0 from '@angular/core';
-import * as i1 from '@angular/material/core';
-import * as i2 from '@angular/material/form-field';
-import * as i4 from '@angular/cdk/text-field';
-import { InjectionToken } from '@angular/core';
-import { MatError } from '@angular/material/form-field';
-import { MatFormField } from '@angular/material/form-field';
-import { MatFormFieldControl } from '@angular/material/form-field';
-import { MatHint } from '@angular/material/form-field';
-import { MatLabel } from '@angular/material/form-field';
-import { MatPrefix } from '@angular/material/form-field';
-import { MatSuffix } from '@angular/material/form-field';
-import { NgControl } from '@angular/forms';
-import { OnChanges } from '@angular/core';
-import { OnDestroy } from '@angular/core';
 import { Platform } from '@angular/cdk/platform';
+import * as i0 from '@angular/core';
+import { InjectionToken, OnChanges, OnDestroy, AfterViewInit, DoCheck, ElementRef, WritableSignal } from '@angular/core';
+import { NgControl } from '@angular/forms';
 import { Subject } from 'rxjs';
-import { WritableSignal } from '@angular/core';
+import { ErrorStateMatcher } from '../error-options.d.js';
+import { MatFormField } from '../form-field.d.js';
+export { MatError, MatHint, MatPrefix, MatSuffix } from '../form-field.d.js';
+import { MatFormFieldControl } from '../form-field-control.d.js';
+import { MatCommonModule } from '../common-module.d.js';
+import { MatFormFieldModule } from '../form-field-module.d.js';
+export { MatLabel } from '../form-field-module.d.js';
+import * as i4 from '@angular/cdk/text-field';
+import '../palette.d.js';
+import '@angular/cdk/bidi';
+import '@angular/cdk/observers';
 
-
-/** @docs-private */
-export declare function getMatInputUnsupportedTypeError(type: string): Error;
-
-declare namespace i3 {
-    export {
-        MatInputConfig,
-        MAT_INPUT_CONFIG,
-        MatInput
-    }
+/** Object that can be used to configure the default options for the input. */
+interface MatInputConfig {
+    /** Whether disabled inputs should be interactive. */
+    disabledInteractive?: boolean;
 }
-
 /** Injection token that can be used to provide the default options for the input. */
-export declare const MAT_INPUT_CONFIG: InjectionToken<MatInputConfig>;
-
-/**
- * This token is used to inject the object whose value should be set into `MatInput`. If none is
- * provided, the native `HTMLInputElement` is used. Directives like `MatDatepickerInput` can provide
- * themselves for this token, in order to make `MatInput` delegate the getting and setting of the
- * value to them.
- */
-export declare const MAT_INPUT_VALUE_ACCESSOR: InjectionToken<{
-    value: any | WritableSignal<any>;
-}>;
-
-export { MatError }
-
-export { MatFormField }
-
-export { MatHint }
-
-export declare class MatInput implements MatFormFieldControl<any>, OnChanges, OnDestroy, AfterViewInit, DoCheck {
+declare const MAT_INPUT_CONFIG: InjectionToken<MatInputConfig>;
+declare class MatInput implements MatFormFieldControl<any>, OnChanges, OnDestroy, AfterViewInit, DoCheck {
     protected _elementRef: ElementRef<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>;
     protected _platform: Platform;
     ngControl: NgControl;
@@ -70,8 +40,6 @@ export declare class MatInput implements MatFormFieldControl<any>, OnChanges, On
     private _config;
     private _cleanupIosKeyup;
     private _cleanupWebkitWheel;
-    /** `aria-describedby` IDs assigned by the form field. */
-    private _formFieldDescribedBy;
     /** Whether the component is being rendered on the server. */
     readonly _isServer: boolean;
     /** Whether the component is a native html select. */
@@ -197,6 +165,11 @@ export declare class MatInput implements MatFormFieldControl<any>, OnChanges, On
      * Implemented as part of MatFormFieldControl.
      * @docs-private
      */
+    get describedByIds(): string[];
+    /**
+     * Implemented as part of MatFormFieldControl.
+     * @docs-private
+     */
     setDescribedByIds(ids: string[]): void;
     /**
      * Implemented as part of MatFormFieldControl.
@@ -206,17 +179,6 @@ export declare class MatInput implements MatFormFieldControl<any>, OnChanges, On
     /** Whether the form control is a native select that is displayed inline. */
     _isInlineSelect(): boolean;
     private _iOSKeyupListener;
-    private _webkitBlinkWheelListener;
-    /**
-     * In blink and webkit browsers a focused number input does not increment or decrement its value
-     * on mouse wheel interaction unless a wheel event listener is attached to it or one of its
-     * ancestors or a passive wheel listener is attached somewhere in the DOM. For example: Hitting
-     * a tooltip once enables the mouse wheel input for all number inputs as long as it exists. In
-     * order to get reliable and intuitive behavior we apply a wheel event on our own thus making
-     * sure increment and decrement by mouse wheel works every time.
-     * @docs-private
-     */
-    private _ensureWheelDefaultBehavior;
     /** Gets the value to set on the `readonly` attribute. */
     protected _getReadonlyAttribute(): string | null;
     static ɵfac: i0.ɵɵFactoryDeclaration<MatInput, never>;
@@ -224,22 +186,24 @@ export declare class MatInput implements MatFormFieldControl<any>, OnChanges, On
     static ngAcceptInputType_disabledInteractive: unknown;
 }
 
-/** Object that can be used to configure the default options for the input. */
-export declare interface MatInputConfig {
-    /** Whether disabled inputs should be interactive. */
-    disabledInteractive?: boolean;
-}
-
-export declare class MatInputModule {
+declare class MatInputModule {
     static ɵfac: i0.ɵɵFactoryDeclaration<MatInputModule, never>;
-    static ɵmod: i0.ɵɵNgModuleDeclaration<MatInputModule, never, [typeof i1.MatCommonModule, typeof i2.MatFormFieldModule, typeof i3.MatInput], [typeof i3.MatInput, typeof i2.MatFormFieldModule, typeof i4.TextFieldModule, typeof i1.MatCommonModule]>;
+    static ɵmod: i0.ɵɵNgModuleDeclaration<MatInputModule, never, [typeof MatCommonModule, typeof MatFormFieldModule, typeof MatInput], [typeof MatInput, typeof MatFormFieldModule, typeof i4.TextFieldModule, typeof MatCommonModule]>;
     static ɵinj: i0.ɵɵInjectorDeclaration<MatInputModule>;
 }
 
-export { MatLabel }
+/**
+ * This token is used to inject the object whose value should be set into `MatInput`. If none is
+ * provided, the native `HTMLInputElement` is used. Directives like `MatDatepickerInput` can provide
+ * themselves for this token, in order to make `MatInput` delegate the getting and setting of the
+ * value to them.
+ */
+declare const MAT_INPUT_VALUE_ACCESSOR: InjectionToken<{
+    value: any | WritableSignal<any>;
+}>;
 
-export { MatPrefix }
+/** @docs-private */
+declare function getMatInputUnsupportedTypeError(type: string): Error;
 
-export { MatSuffix }
-
-export { }
+export { MAT_INPUT_CONFIG, MAT_INPUT_VALUE_ACCESSOR, MatFormField, MatInput, MatInputModule, getMatInputUnsupportedTypeError };
+export type { MatInputConfig };

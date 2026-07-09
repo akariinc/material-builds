@@ -1,4 +1,5 @@
 import { ComponentHarness, HarnessPredicate, ContentContainerComponentHarness, TestKey, parallel } from '@angular/cdk/testing';
+import { coerceBooleanProperty } from '@angular/cdk/coercion';
 
 /** Harness for interacting with a standard Material chip avatar in tests. */
 class MatChipAvatarHarness extends ComponentHarness {
@@ -11,6 +12,24 @@ class MatChipAvatarHarness extends ComponentHarness {
      */
     static with(options = {}) {
         return new HarnessPredicate(this, options);
+    }
+}
+
+/** Harness for interacting with a standard Material chip edit button in tests. */
+class MatChipEditHarness extends ComponentHarness {
+    static hostSelector = '.mat-mdc-chip-edit';
+    /**
+     * Gets a `HarnessPredicate` that can be used to search for a chip edit with specific
+     * attributes.
+     * @param options Options for filtering which input instances are considered a match.
+     * @return a `HarnessPredicate` configured with the given options.
+     */
+    static with(options = {}) {
+        return new HarnessPredicate(this, options);
+    }
+    /** Clicks the edit button. */
+    async click() {
+        return (await this.host()).click();
     }
 }
 
@@ -66,6 +85,13 @@ class MatChipHarness extends ContentContainerComponentHarness {
         await hostEl.sendKeys(TestKey.DELETE);
     }
     /**
+     * Gets the edit button inside of a chip.
+     * @param filter Optionally filters which chips are included.
+     */
+    async geEditButton(filter = {}) {
+        return this.locatorFor(MatChipEditHarness.with(filter))();
+    }
+    /**
      * Gets the remove button inside of a chip.
      * @param filter Optionally filters which chips are included.
      */
@@ -104,7 +130,12 @@ class MatChipInputHarness extends ComponentHarness {
     }
     /** Whether the input is disabled. */
     async isDisabled() {
-        return (await this.host()).getProperty('disabled');
+        const host = await this.host();
+        const disabled = await host.getAttribute('disabled');
+        if (disabled !== null) {
+            return coerceBooleanProperty(disabled);
+        }
+        return (await host.getAttribute('aria-disabled')) === 'true';
     }
     /** Whether the input is required. */
     async isRequired() {
@@ -353,5 +384,5 @@ class MatChipSetHarness extends ComponentHarness {
     }
 }
 
-export { MatChipAvatarHarness, MatChipEditInputHarness, MatChipGridHarness, MatChipHarness, MatChipInputHarness, MatChipListboxHarness, MatChipOptionHarness, MatChipRemoveHarness, MatChipRowHarness, MatChipSetHarness };
+export { MatChipAvatarHarness, MatChipEditHarness, MatChipEditInputHarness, MatChipGridHarness, MatChipHarness, MatChipInputHarness, MatChipListboxHarness, MatChipOptionHarness, MatChipRemoveHarness, MatChipRowHarness, MatChipSetHarness };
 //# sourceMappingURL=testing.mjs.map

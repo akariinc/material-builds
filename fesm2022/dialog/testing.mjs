@@ -1,8 +1,21 @@
 import { ContentContainerComponentHarness, HarnessPredicate, TestKey } from '@angular/cdk/testing';
 import { __decorate, __metadata } from 'tslib';
 import { inject, NgZone, Component, ChangeDetectionStrategy, ViewEncapsulation, NgModule } from '@angular/core';
-import { MatDialog, MatDialogModule } from '@angular/material/dialog';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
+import { MATERIAL_ANIMATIONS } from '@angular/material/core';
+import { MatDialog, MatDialogModule } from '../dialog-module.mjs';
+import '@angular/cdk/dialog';
+import '@angular/cdk/overlay';
+import '@angular/cdk/portal';
+import '@angular/cdk/coercion';
+import '../animation.mjs';
+import '@angular/cdk/layout';
+import 'rxjs';
+import 'rxjs/operators';
+import '@angular/cdk/keycodes';
+import '@angular/cdk/a11y';
+import '@angular/cdk/scrolling';
+import '../common-module.mjs';
+import '@angular/cdk/bidi';
 
 /** Selectors for different sections of the mat-dialog that can contain user content. */
 var MatDialogSection;
@@ -59,7 +72,7 @@ class MatDialogHarness
     async close() {
         await (await this.host()).sendKeys(TestKey.ESCAPE);
     }
-    /** Gets te dialog's text. */
+    /** Gets the dialog's text. */
     async getText() {
         return (await this.host()).text();
     }
@@ -102,7 +115,12 @@ let MatTestDialogOpener = class MatTestDialogOpener {
         if (!MatTestDialogOpener_1.component) {
             throw new Error(`MatTestDialogOpener does not have a component provided.`);
         }
-        this.dialogRef = this._ngZone.run(() => this.dialog.open(MatTestDialogOpener_1.component, MatTestDialogOpener_1.config || {}));
+        this.dialogRef = this._ngZone.run(() => {
+            const config = { ...(MatTestDialogOpener_1.config || {}) };
+            config.enterAnimationDuration = 0;
+            config.exitAnimationDuration = 0;
+            return this.dialog.open(MatTestDialogOpener_1.component, config);
+        });
         this._afterClosedSubscription = this.dialogRef.afterClosed().subscribe(result => {
             this.closedResult = result;
         });
@@ -126,7 +144,15 @@ let MatTestDialogOpenerModule = class MatTestDialogOpenerModule {
 };
 MatTestDialogOpenerModule = __decorate([
     NgModule({
-        imports: [MatDialogModule, NoopAnimationsModule, MatTestDialogOpener],
+        imports: [MatDialogModule, MatTestDialogOpener],
+        providers: [
+            {
+                provide: MATERIAL_ANIMATIONS,
+                useValue: {
+                    animationsDisabled: true,
+                },
+            },
+        ],
     })
 ], MatTestDialogOpenerModule);
 

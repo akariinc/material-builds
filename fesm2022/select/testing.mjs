@@ -1,9 +1,9 @@
 import { HarnessPredicate, parallel } from '@angular/cdk/testing';
 import { MatOptionHarness, MatOptgroupHarness } from '@angular/material/core/testing';
-import { MatFormFieldControlHarness } from '@angular/material/form-field/testing/control';
+import { MatFormFieldControlHarnessBase } from '@angular/material/form-field/testing/control';
 
 /** Harness for interacting with a mat-select in tests. */
-class MatSelectHarness extends MatFormFieldControlHarness {
+class MatSelectHarness extends MatFormFieldControlHarnessBase {
     static hostSelector = '.mat-mdc-select';
     _prefix = 'mat-mdc';
     _optionClass = MatOptionHarness;
@@ -16,8 +16,12 @@ class MatSelectHarness extends MatFormFieldControlHarness {
      * @return a `HarnessPredicate` configured with the given options.
      */
     static with(options = {}) {
-        return new HarnessPredicate(this, options).addOption('disabled', options.disabled, async (harness, disabled) => {
+        return new HarnessPredicate(this, options)
+            .addOption('disabled', options.disabled, async (harness, disabled) => {
             return (await harness.isDisabled()) === disabled;
+        })
+            .addOption('label', options.label, (harness, label) => {
+            return HarnessPredicate.stringMatches(harness.getLabel(), label);
         });
     }
     /** Gets a boolean promise indicating if the select is disabled. */

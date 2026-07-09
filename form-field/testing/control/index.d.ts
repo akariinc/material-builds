@@ -1,10 +1,13 @@
-import { ComponentHarness } from '@angular/cdk/testing';
+export { MatFormFieldControlHarness, MatFormFieldControlHarnessBase } from '../../../form-field-control-harness.d.js';
+import { BaseHarnessFilters } from '@angular/cdk/testing';
 
 /**
- * Base class for custom form-field control harnesses. Harnesses for
- * custom controls with form-fields need to implement this interface.
+ * A set of criteria shared by any class derived from `MatFormFieldControlHarness`, that can be
+ * used to filter a list of those components.
  */
-export declare abstract class MatFormFieldControlHarness extends ComponentHarness {
+interface MatFormFieldControlHarnessFilters extends BaseHarnessFilters {
+    /** Filters based on the text of the form field's floating label. */
+    label?: string | RegExp;
 }
 
-export { }
+export type { MatFormFieldControlHarnessFilters };
