@@ -1,0 +1,952 @@
+import { takeUntil } from 'rxjs/operators';
+import { coerceBooleanProperty, coerceNumberProperty } from '@angular/cdk/coercion';
+import { ESCAPE, hasModifierKey } from '@angular/cdk/keycodes';
+import * as i0 from '@angular/core';
+import { InjectionToken, inject, Injector, ElementRef, NgZone, ViewContainerRef, DOCUMENT, Renderer2, afterNextRender, ChangeDetectorRef, Input, Directive, ViewChild, ViewEncapsulation, Component } from '@angular/core';
+import { Platform } from '@angular/cdk/platform';
+import { AriaDescriber, FocusMonitor } from '@angular/cdk/a11y';
+import { Directionality } from '@angular/cdk/bidi';
+import { createRepositionScrollStrategy, ScrollDispatcher, createFlexibleConnectedPositionStrategy, createOverlayRef } from '@angular/cdk/overlay';
+import { ComponentPortal } from '@angular/cdk/portal';
+import { MediaMatcher } from '@angular/cdk/layout';
+import { Subject } from 'rxjs';
+import { _animationsDisabled } from './_animation-chunk.mjs';
+
+const HTML_ELEMENTS = 'address,article,aside,blockquote,caption,center,del,details,dialog,dir,div,dl,dd,dt,' + 'figure,figcaption,footer,h1,h2,h3,h4,h5,h6,header,hgroup,hr,ins,main,map,menu,nav,ol,' + 'li,ul,pre,section,summary,table,tbody,td,tfoot,th,thead,tr,a,abbr,acronym,audio,b,bdi,' + 'bdo,big,br,cite,code,em,font,i,img,kbd,label,mark,picture,q,rp,rt,ruby,s,samp,small,' + 'source,span,strike,strong,sub,sup,time,track,tt,u,var,video';
+const SVG_ELEMENTS = 'svg,circle,clippath,defs,desc,ellipse,filter,feblend,fecolormatrix,fecomponenttransfer,' + 'fecomposite,feconvolvematrix,fediffuselighting,fedisplacementmap,fedistantlight,' + 'fedropshadow,feflood,fefunca,fefuncb,fefuncg,fefuncr,fegaussianblur,femerge,femergenode,' + 'femorphology,feoffset,fepointlight,fespecularlighting,fespotlight,fetile,feturbulence,' + 'g,image,line,lineargradient,marker,mask,path,pattern,polygon,polyline,radialgradient,' + 'rect,stop,switch,symbol,text,textpath,title,tspan,use,view';
+const URL_ATTRIBUTES = 'background,cite,href,longdesc,src,xlink:href,xml:base';
+const SAFE_ATTRIBUTES = 'abbr,accesskey,align,alt,autoplay,axis,bgcolor,border,cellpadding,cellspacing,class,clear,' + 'color,cols,colspan,compact,controls,coords,datetime,dir,download,face,headers,height,' + 'hidden,hreflang,hspace,ismap,itemprop,itemscope,lang,language,loop,media,muted,nohref,' + 'nowrap,open,preload,rel,rev,role,rows,rowspan,rules,scope,scrolling,shape,size,sizes,span,' + 'srclang,srcset,start,style,summary,tabindex,target,title,translate,type,usemap,valign,' + 'value,vspace,width,' + 'accent-height,alignment-baseline,baseline-shift,baseprofile,bbox,cap-height,clip,' + 'clip-path,clip-rule,clippathunits,color-interpolation,color-interpolation-filters,' + 'color-profile,color-rendering,cursor,cx,cy,d,direction,display,dominant-baseline,dx,dy,' + 'fill,fill-opacity,fill-rule,filterunits,flood-color,flood-opacity,font-family,font-size,' + 'font-size-adjust,font-stretch,font-style,font-variant,font-weight,fx,fy,' + 'glyph-orientation-horizontal,glyph-orientation-vertical,gradienttransform,gradientunits,' + 'image-rendering,in,in2,k1,k2,k3,k4,kerning,letter-spacing,lighting-color,marker-end,' + 'marker-mid,marker-start,markerheight,markerunits,markerwidth,mask,maskcontentunits,' + 'maskunits,mode,offset,opacity,operator,order,orient,overflow,paint-order,pathlength,' + 'patterncontentunits,patterntransform,patternunits,points,preserveaspectratio,r,radius,' + 'refx,refy,repeatcount,repeatdur,requiredextensions,requiredfeatures,restart,result,rotate,' + 'rx,ry,scale,seed,shape-rendering,spreadmethod,startoffset,stddeviation,stop-color,' + 'stop-opacity,stroke,stroke-dasharray,stroke-dashoffset,stroke-linecap,stroke-linejoin,' + 'stroke-miterlimit,stroke-opacity,stroke-width,systemlanguage,text-anchor,text-decoration,' + 'text-rendering,transform,transform-origin,u1,u2,unicode-bidi,vector-effect,version,' + 'viewbox,visibility,white-space,word-spacing,writing-mode,x,x1,x2,xmlns,xmlns:xlink,' + 'xml:lang,xml:space,y,y1,y2,zoomandpan';
+const toSet = csv => new Set(csv.split(','));
+const ALLOWED_ELEMENTS = toSet(HTML_ELEMENTS + ',' + SVG_ELEMENTS);
+const ALLOWED_ATTRIBUTES = toSet(SAFE_ATTRIBUTES);
+const URL_ATTRIBUTE_SET = toSet(URL_ATTRIBUTES);
+const SAFE_URL_PATTERN = /^(?:(?:https?|mailto|ftp|tel|file|sms):|[^&:/?#]*(?:[/?#]|$))/i;
+const DATA_URL_PATTERN = /^data:(?:image\/(?:bmp|gif|jpeg|jpg|png|tiff|webp)|video\/(?:mpeg|mp4|ogg|webm)|audio\/(?:mp3|oga|ogg|opus));base64,[a-z0-9+/]+=*$/i;
+const isSafeUrl = value => {
+  const url = value.trim();
+  return SAFE_URL_PATTERN.test(url) || DATA_URL_PATTERN.test(url);
+};
+const escapeHtml = text => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const parseInert = html => {
+  if (typeof DOMParser !== 'undefined') {
+    return new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html').body;
+  }
+  if (typeof document !== 'undefined') {
+    const inertDocument = document.implementation.createHTMLDocument('sanitization');
+    inertDocument.body.innerHTML = html;
+    return inertDocument.body;
+  }
+  return null;
+};
+const sanitizeAttributes = element => {
+  const isUseElement = element.nodeName.toLowerCase() === 'use';
+  for (const attribute of Array.from(element.attributes)) {
+    const name = attribute.name.toLowerCase();
+    if (URL_ATTRIBUTE_SET.has(name)) {
+      const safe = isUseElement ? attribute.value.trim().startsWith('#') : isSafeUrl(attribute.value);
+      if (!safe) {
+        element.removeAttribute(attribute.name);
+      }
+    } else if (name.startsWith('on') || !ALLOWED_ATTRIBUTES.has(name)) {
+      element.removeAttribute(attribute.name);
+    }
+  }
+};
+const sanitizeChildren = node => {
+  for (const child of Array.from(node.childNodes)) {
+    if (child.nodeType === 1) {
+      const element = child;
+      if (!ALLOWED_ELEMENTS.has(element.nodeName.toLowerCase())) {
+        element.remove();
+        continue;
+      }
+      sanitizeAttributes(element);
+      sanitizeChildren(element);
+    } else if (child.nodeType !== 3) {
+      child.remove();
+    }
+  }
+};
+const sanitizeHtml = html => {
+  if (!html) {
+    return '';
+  }
+  const body = parseInert(html);
+  if (body === null) {
+    return escapeHtml(html);
+  }
+  sanitizeChildren(body);
+  return body.innerHTML;
+};
+const htmlToPlainText = html => {
+  if (!html) {
+    return '';
+  }
+  const body = parseInert(html);
+  return (body === null ? html.replace(/<[^>]*>/g, ' ') : body.textContent || '').replace(/\s+/g, ' ').trim();
+};
+
+const SCROLL_THROTTLE_MS = 20;
+function getMatTooltipInvalidPositionError(position) {
+  return Error(`Tooltip position "${position}" is invalid.`);
+}
+const MAT_TOOLTIP_SCROLL_STRATEGY = new InjectionToken('mat-tooltip-scroll-strategy', {
+  providedIn: 'root',
+  factory: () => {
+    const injector = inject(Injector);
+    return () => createRepositionScrollStrategy(injector, {
+      scrollThrottle: SCROLL_THROTTLE_MS
+    });
+  }
+});
+const MAT_TOOLTIP_DEFAULT_OPTIONS = new InjectionToken('mat-tooltip-default-options', {
+  providedIn: 'root',
+  factory: () => ({
+    showDelay: 0,
+    hideDelay: 0,
+    touchendHideDelay: 1500
+  })
+});
+const TOOLTIP_PANEL_CLASS = 'mat-mdc-tooltip-panel';
+const PANEL_CLASS = 'tooltip-panel';
+const passiveListenerOptions = {
+  passive: true
+};
+const MIN_VIEWPORT_TOOLTIP_THRESHOLD = 8;
+const UNBOUNDED_ANCHOR_GAP = 8;
+const MIN_HEIGHT = 24;
+const MAX_WIDTH = 200;
+class MatTooltip {
+  _elementRef = inject(ElementRef);
+  _ngZone = inject(NgZone);
+  _platform = inject(Platform);
+  _ariaDescriber = inject(AriaDescriber);
+  _focusMonitor = inject(FocusMonitor);
+  _dir = inject(Directionality);
+  _injector = inject(Injector);
+  _viewContainerRef = inject(ViewContainerRef);
+  _mediaMatcher = inject(MediaMatcher);
+  _document = inject(DOCUMENT);
+  _renderer = inject(Renderer2);
+  _animationsDisabled = _animationsDisabled();
+  _defaultOptions = inject(MAT_TOOLTIP_DEFAULT_OPTIONS, {
+    optional: true
+  });
+  _overlayRef = null;
+  _tooltipInstance = null;
+  _overlayPanelClass;
+  _portal;
+  _position = 'below';
+  _positionAtOrigin = false;
+  _disabled = false;
+  _tooltipClass;
+  _viewInitialized = false;
+  _pointerExitEventsInitialized = false;
+  _tooltipComponent = TooltipComponent;
+  _viewportMargin = 8;
+  _currentPosition;
+  _cssClassPrefix = 'mat-mdc';
+  _ariaDescriptionPending = false;
+  _dirSubscribed = false;
+  get position() {
+    return this._position;
+  }
+  set position(value) {
+    if (value !== this._position) {
+      this._position = value;
+      if (this._overlayRef) {
+        this._updatePosition(this._overlayRef);
+        this._tooltipInstance?.show(0);
+        this._overlayRef.updatePosition();
+      }
+    }
+  }
+  get positionAtOrigin() {
+    return this._positionAtOrigin;
+  }
+  set positionAtOrigin(value) {
+    this._positionAtOrigin = coerceBooleanProperty(value);
+    this._detach();
+    this._overlayRef = null;
+  }
+  get disabled() {
+    return this._disabled;
+  }
+  set disabled(value) {
+    const isDisabled = coerceBooleanProperty(value);
+    if (this._disabled !== isDisabled) {
+      this._disabled = isDisabled;
+      if (isDisabled) {
+        this.hide(0);
+      } else {
+        this._setupPointerEnterEventsIfNeeded();
+      }
+      this._syncAriaDescription(this._ariaMessage);
+    }
+  }
+  get showDelay() {
+    return this._showDelay;
+  }
+  set showDelay(value) {
+    this._showDelay = coerceNumberProperty(value);
+  }
+  _showDelay;
+  get hideDelay() {
+    return this._hideDelay;
+  }
+  set hideDelay(value) {
+    this._hideDelay = coerceNumberProperty(value);
+    if (this._tooltipInstance) {
+      this._tooltipInstance._mouseLeaveHideDelay = this._hideDelay;
+    }
+  }
+  _hideDelay;
+  touchGestures = 'auto';
+  get message() {
+    return this._message;
+  }
+  set message(value) {
+    const oldAriaMessage = this._ariaMessage;
+    this._message = sanitizeHtml(value != null ? String(value).trim() : '');
+    this._ariaMessage = htmlToPlainText(this._message);
+    if (!this._message && this._isTooltipVisible()) {
+      this.hide(0);
+    } else {
+      this._setupPointerEnterEventsIfNeeded();
+      this._updateTooltipMessage();
+    }
+    this._syncAriaDescription(oldAriaMessage);
+  }
+  _message = '';
+  _ariaMessage = '';
+  get tooltipClass() {
+    return this._tooltipClass;
+  }
+  set tooltipClass(value) {
+    this._tooltipClass = value;
+    if (this._tooltipInstance) {
+      this._setTooltipClass(this._tooltipClass);
+    }
+  }
+  _eventCleanups = [];
+  _touchstartTimeout = null;
+  _destroyed = new Subject();
+  _isDestroyed = false;
+  constructor() {
+    const defaultOptions = this._defaultOptions;
+    if (defaultOptions) {
+      this._showDelay = defaultOptions.showDelay;
+      this._hideDelay = defaultOptions.hideDelay;
+      if (defaultOptions.position) {
+        this.position = defaultOptions.position;
+      }
+      if (defaultOptions.positionAtOrigin) {
+        this.positionAtOrigin = defaultOptions.positionAtOrigin;
+      }
+      if (defaultOptions.touchGestures) {
+        this.touchGestures = defaultOptions.touchGestures;
+      }
+      if (defaultOptions.tooltipClass) {
+        this.tooltipClass = defaultOptions.tooltipClass;
+      }
+    }
+    this._viewportMargin = MIN_VIEWPORT_TOOLTIP_THRESHOLD;
+  }
+  ngAfterViewInit() {
+    this._viewInitialized = true;
+    this._setupPointerEnterEventsIfNeeded();
+    this._focusMonitor.monitor(this._elementRef).pipe(takeUntil(this._destroyed)).subscribe(origin => {
+      if (!origin) {
+        this._ngZone.run(() => this.hide(0));
+      } else if (origin === 'keyboard') {
+        this._ngZone.run(() => this.show());
+      }
+    });
+  }
+  ngOnDestroy() {
+    const nativeElement = this._elementRef.nativeElement;
+    if (this._touchstartTimeout) {
+      clearTimeout(this._touchstartTimeout);
+    }
+    if (this._overlayRef) {
+      this._overlayRef.dispose();
+      this._tooltipInstance = null;
+    }
+    this._eventCleanups.forEach(cleanup => cleanup());
+    this._eventCleanups.length = 0;
+    this._destroyed.next();
+    this._destroyed.complete();
+    this._isDestroyed = true;
+    this._ariaDescriber.removeDescription(nativeElement, this._ariaMessage, 'tooltip');
+    this._focusMonitor.stopMonitoring(nativeElement);
+  }
+  show(delay = this.showDelay, origin) {
+    if (this.disabled || !this.message || this._isTooltipVisible()) {
+      this._tooltipInstance?._cancelPendingAnimations();
+      return;
+    }
+    const overlayRef = this._createOverlay(origin);
+    this._detach();
+    this._portal = this._portal || new ComponentPortal(this._tooltipComponent, this._viewContainerRef);
+    const instance = this._tooltipInstance = overlayRef.attach(this._portal).instance;
+    instance._triggerElement = this._elementRef.nativeElement;
+    instance._mouseLeaveHideDelay = this._hideDelay;
+    instance.afterHidden().pipe(takeUntil(this._destroyed)).subscribe(() => this._detach());
+    this._setTooltipClass(this._tooltipClass);
+    this._updateTooltipMessage();
+    instance.show(delay);
+  }
+  hide(delay = this.hideDelay) {
+    const instance = this._tooltipInstance;
+    if (instance) {
+      if (instance.isVisible()) {
+        instance.hide(delay);
+      } else {
+        instance._cancelPendingAnimations();
+        this._detach();
+      }
+    }
+  }
+  toggle(origin) {
+    this._isTooltipVisible() ? this.hide() : this.show(undefined, origin);
+  }
+  _isTooltipVisible() {
+    return !!this._tooltipInstance && this._tooltipInstance.isVisible();
+  }
+  _createOverlay(origin) {
+    if (this._overlayRef) {
+      const existingStrategy = this._overlayRef.getConfig().positionStrategy;
+      if ((!this.positionAtOrigin || !origin) && existingStrategy._origin instanceof ElementRef) {
+        return this._overlayRef;
+      }
+      this._detach();
+    }
+    const scrollableAncestors = this._injector.get(ScrollDispatcher).getAncestorScrollContainers(this._elementRef);
+    const panelClass = `${this._cssClassPrefix}-${PANEL_CLASS}`;
+    const strategy = createFlexibleConnectedPositionStrategy(this._injector, this.positionAtOrigin ? origin || this._elementRef : this._elementRef).withTransformOriginOn(`.${this._cssClassPrefix}-tooltip`).withFlexibleDimensions(false).withViewportMargin(this._viewportMargin).withScrollableContainers(scrollableAncestors).withPopoverLocation('global');
+    strategy.positionChanges.pipe(takeUntil(this._destroyed)).subscribe(change => {
+      this._updateCurrentPositionClass(change.connectionPair);
+      if (this._tooltipInstance) {
+        if (change.scrollableViewProperties.isOverlayClipped && this._tooltipInstance.isVisible()) {
+          this._ngZone.run(() => this.hide(0));
+        }
+      }
+    });
+    this._overlayRef = createOverlayRef(this._injector, {
+      direction: this._dir,
+      positionStrategy: strategy,
+      panelClass: this._overlayPanelClass ? [...this._overlayPanelClass, panelClass] : panelClass,
+      scrollStrategy: this._injector.get(MAT_TOOLTIP_SCROLL_STRATEGY)(),
+      disableAnimations: this._animationsDisabled,
+      eventPredicate: this._overlayEventPredicate
+    });
+    this._updatePosition(this._overlayRef);
+    this._overlayRef.detachments().pipe(takeUntil(this._destroyed)).subscribe(() => this._detach());
+    this._overlayRef.outsidePointerEvents().pipe(takeUntil(this._destroyed)).subscribe(() => this._tooltipInstance?._handleBodyInteraction());
+    this._overlayRef.keydownEvents().pipe(takeUntil(this._destroyed)).subscribe(event => {
+      event.preventDefault();
+      event.stopPropagation();
+      this._ngZone.run(() => this.hide(0));
+    });
+    if (this._defaultOptions?.disableTooltipInteractivity) {
+      this._overlayRef.addPanelClass(`${this._cssClassPrefix}-tooltip-panel-non-interactive`);
+    }
+    if (!this._dirSubscribed) {
+      this._dirSubscribed = true;
+      this._dir.change.pipe(takeUntil(this._destroyed)).subscribe(() => {
+        if (this._overlayRef) {
+          this._updatePosition(this._overlayRef);
+        }
+      });
+    }
+    return this._overlayRef;
+  }
+  _detach() {
+    if (this._overlayRef && this._overlayRef.hasAttached()) {
+      this._overlayRef.detach();
+    }
+    this._tooltipInstance = null;
+  }
+  _updatePosition(overlayRef) {
+    const position = overlayRef.getConfig().positionStrategy;
+    const origin = this._getOrigin();
+    const overlay = this._getOverlayPosition();
+    position.withPositions([this._addOffset({
+      ...origin.main,
+      ...overlay.main
+    }), this._addOffset({
+      ...origin.fallback,
+      ...overlay.fallback
+    })]);
+  }
+  _addOffset(position) {
+    const offset = UNBOUNDED_ANCHOR_GAP;
+    const isLtr = !this._dir || this._dir.value == 'ltr';
+    if (position.originY === 'top') {
+      position.offsetY = -offset;
+    } else if (position.originY === 'bottom') {
+      position.offsetY = offset;
+    } else if (position.originX === 'start') {
+      position.offsetX = isLtr ? -offset : offset;
+    } else if (position.originX === 'end') {
+      position.offsetX = isLtr ? offset : -offset;
+    }
+    return position;
+  }
+  _getOrigin() {
+    const isLtr = !this._dir || this._dir.value == 'ltr';
+    const position = this.position;
+    let originPosition;
+    if (position == 'above' || position == 'below') {
+      originPosition = {
+        originX: 'center',
+        originY: position == 'above' ? 'top' : 'bottom'
+      };
+    } else if (position == 'before' || position == 'left' && isLtr || position == 'right' && !isLtr) {
+      originPosition = {
+        originX: 'start',
+        originY: 'center'
+      };
+    } else if (position == 'after' || position == 'right' && isLtr || position == 'left' && !isLtr) {
+      originPosition = {
+        originX: 'end',
+        originY: 'center'
+      };
+    } else if (typeof ngDevMode === 'undefined' || ngDevMode) {
+      throw getMatTooltipInvalidPositionError(position);
+    }
+    const {
+      x,
+      y
+    } = this._invertPosition(originPosition.originX, originPosition.originY);
+    return {
+      main: originPosition,
+      fallback: {
+        originX: x,
+        originY: y
+      }
+    };
+  }
+  _getOverlayPosition() {
+    const isLtr = !this._dir || this._dir.value == 'ltr';
+    const position = this.position;
+    let overlayPosition;
+    if (position == 'above') {
+      overlayPosition = {
+        overlayX: 'center',
+        overlayY: 'bottom'
+      };
+    } else if (position == 'below') {
+      overlayPosition = {
+        overlayX: 'center',
+        overlayY: 'top'
+      };
+    } else if (position == 'before' || position == 'left' && isLtr || position == 'right' && !isLtr) {
+      overlayPosition = {
+        overlayX: 'end',
+        overlayY: 'center'
+      };
+    } else if (position == 'after' || position == 'right' && isLtr || position == 'left' && !isLtr) {
+      overlayPosition = {
+        overlayX: 'start',
+        overlayY: 'center'
+      };
+    } else if (typeof ngDevMode === 'undefined' || ngDevMode) {
+      throw getMatTooltipInvalidPositionError(position);
+    }
+    const {
+      x,
+      y
+    } = this._invertPosition(overlayPosition.overlayX, overlayPosition.overlayY);
+    return {
+      main: overlayPosition,
+      fallback: {
+        overlayX: x,
+        overlayY: y
+      }
+    };
+  }
+  _updateTooltipMessage() {
+    if (this._tooltipInstance) {
+      this._tooltipInstance.message = this.message;
+      this._tooltipInstance._markForCheck();
+      afterNextRender(() => {
+        if (this._tooltipInstance) {
+          this._overlayRef.updatePosition();
+        }
+      }, {
+        injector: this._injector
+      });
+    }
+  }
+  _setTooltipClass(tooltipClass) {
+    if (this._tooltipInstance) {
+      this._tooltipInstance.tooltipClass = tooltipClass instanceof Set ? Array.from(tooltipClass) : tooltipClass;
+      this._tooltipInstance._markForCheck();
+    }
+  }
+  _invertPosition(x, y) {
+    if (this.position === 'above' || this.position === 'below') {
+      if (y === 'top') {
+        y = 'bottom';
+      } else if (y === 'bottom') {
+        y = 'top';
+      }
+    } else {
+      if (x === 'end') {
+        x = 'start';
+      } else if (x === 'start') {
+        x = 'end';
+      }
+    }
+    return {
+      x,
+      y
+    };
+  }
+  _updateCurrentPositionClass(connectionPair) {
+    const {
+      overlayY,
+      originX,
+      originY
+    } = connectionPair;
+    let newPosition;
+    if (overlayY === 'center') {
+      if (this._dir && this._dir.value === 'rtl') {
+        newPosition = originX === 'end' ? 'left' : 'right';
+      } else {
+        newPosition = originX === 'start' ? 'left' : 'right';
+      }
+    } else {
+      newPosition = overlayY === 'bottom' && originY === 'top' ? 'above' : 'below';
+    }
+    if (newPosition !== this._currentPosition) {
+      const overlayRef = this._overlayRef;
+      if (overlayRef) {
+        const classPrefix = `${this._cssClassPrefix}-${PANEL_CLASS}-`;
+        overlayRef.removePanelClass(classPrefix + this._currentPosition);
+        overlayRef.addPanelClass(classPrefix + newPosition);
+      }
+      this._currentPosition = newPosition;
+    }
+  }
+  _setupPointerEnterEventsIfNeeded() {
+    if (this._disabled || !this.message || !this._viewInitialized || this._eventCleanups.length) {
+      return;
+    }
+    if (!this._isTouchPlatform()) {
+      this._addListener('mouseenter', event => {
+        this._setupPointerExitEventsIfNeeded();
+        let point = undefined;
+        if (event.x !== undefined && event.y !== undefined) {
+          point = event;
+        }
+        this.show(undefined, point);
+      });
+    } else if (this.touchGestures !== 'off') {
+      this._disableNativeGesturesIfNecessary();
+      this._addListener('touchstart', event => {
+        const touch = event.targetTouches?.[0];
+        const origin = touch ? {
+          x: touch.clientX,
+          y: touch.clientY
+        } : undefined;
+        this._setupPointerExitEventsIfNeeded();
+        if (this._touchstartTimeout) {
+          clearTimeout(this._touchstartTimeout);
+        }
+        const DEFAULT_LONGPRESS_DELAY = 500;
+        this._touchstartTimeout = setTimeout(() => {
+          this._touchstartTimeout = null;
+          this.show(undefined, origin);
+        }, this._defaultOptions?.touchLongPressShowDelay ?? DEFAULT_LONGPRESS_DELAY);
+      });
+    }
+  }
+  _setupPointerExitEventsIfNeeded() {
+    if (this._pointerExitEventsInitialized) {
+      return;
+    }
+    this._pointerExitEventsInitialized = true;
+    if (!this._isTouchPlatform()) {
+      this._addListener('mouseleave', event => {
+        const newTarget = event.relatedTarget;
+        if (!newTarget || !this._overlayRef?.overlayElement.contains(newTarget)) {
+          this.hide();
+        }
+      });
+      this._addListener('wheel', event => {
+        if (this._isTooltipVisible()) {
+          const elementUnderPointer = this._document.elementFromPoint(event.clientX, event.clientY);
+          const element = this._elementRef.nativeElement;
+          if (elementUnderPointer !== element && !element.contains(elementUnderPointer)) {
+            this.hide();
+          }
+        }
+      });
+    } else if (this.touchGestures !== 'off') {
+      this._disableNativeGesturesIfNecessary();
+      const touchendListener = () => {
+        if (this._touchstartTimeout) {
+          clearTimeout(this._touchstartTimeout);
+        }
+        this.hide(this._defaultOptions?.touchendHideDelay);
+      };
+      this._addListener('touchend', touchendListener);
+      this._addListener('touchcancel', touchendListener);
+    }
+  }
+  _addListener(name, listener) {
+    this._eventCleanups.push(this._renderer.listen(this._elementRef.nativeElement, name, listener, passiveListenerOptions));
+  }
+  _isTouchPlatform() {
+    const detectHoverCapability = this._defaultOptions?.detectHoverCapability;
+    if (typeof detectHoverCapability === 'function') {
+      return !detectHoverCapability();
+    }
+    if (this._platform.IOS || this._platform.ANDROID) {
+      return true;
+    } else if (!this._platform.isBrowser) {
+      return false;
+    }
+    return !!detectHoverCapability && this._mediaMatcher.matchMedia('(any-hover: none)').matches;
+  }
+  _disableNativeGesturesIfNecessary() {
+    const gestures = this.touchGestures;
+    if (gestures !== 'off') {
+      const element = this._elementRef.nativeElement;
+      const style = element.style;
+      if (gestures === 'on' || element.nodeName !== 'INPUT' && element.nodeName !== 'TEXTAREA') {
+        style['userSelect'] = style['msUserSelect'] = style['webkitUserSelect'] = style['MozUserSelect'] = 'none';
+      }
+      if (gestures === 'on' || !element.draggable) {
+        style['webkitUserDrag'] = 'none';
+      }
+      style['touchAction'] = 'none';
+      style['webkitTapHighlightColor'] = 'transparent';
+    }
+  }
+  _syncAriaDescription(oldMessage) {
+    if (this._ariaDescriptionPending) {
+      return;
+    }
+    this._ariaDescriptionPending = true;
+    this._ariaDescriber.removeDescription(this._elementRef.nativeElement, oldMessage, 'tooltip');
+    if (!this._isDestroyed) {
+      afterNextRender({
+        write: () => {
+          this._ariaDescriptionPending = false;
+          if (this._ariaMessage && !this.disabled) {
+            this._ariaDescriber.describe(this._elementRef.nativeElement, this._ariaMessage, 'tooltip');
+          }
+        }
+      }, {
+        injector: this._injector
+      });
+    }
+  }
+  _overlayEventPredicate = event => {
+    if (event.type === 'keydown') {
+      return this._isTooltipVisible() && event.keyCode === ESCAPE && !hasModifierKey(event);
+    }
+    return true;
+  };
+  static ɵfac = i0.ɵɵngDeclareFactory({
+    minVersion: "12.0.0",
+    version: "22.0.5",
+    ngImport: i0,
+    type: MatTooltip,
+    deps: [],
+    target: i0.ɵɵFactoryTarget.Directive
+  });
+  static ɵdir = i0.ɵɵngDeclareDirective({
+    minVersion: "14.0.0",
+    version: "22.0.5",
+    type: MatTooltip,
+    isStandalone: true,
+    selector: "[matTooltip]",
+    inputs: {
+      position: ["matTooltipPosition", "position"],
+      positionAtOrigin: ["matTooltipPositionAtOrigin", "positionAtOrigin"],
+      disabled: ["matTooltipDisabled", "disabled"],
+      showDelay: ["matTooltipShowDelay", "showDelay"],
+      hideDelay: ["matTooltipHideDelay", "hideDelay"],
+      touchGestures: ["matTooltipTouchGestures", "touchGestures"],
+      message: ["matTooltip", "message"],
+      tooltipClass: ["matTooltipClass", "tooltipClass"]
+    },
+    host: {
+      properties: {
+        "class.mat-mdc-tooltip-disabled": "disabled"
+      },
+      classAttribute: "mat-mdc-tooltip-trigger"
+    },
+    exportAs: ["matTooltip"],
+    ngImport: i0
+  });
+}
+i0.ɵɵngDeclareClassMetadata({
+  minVersion: "12.0.0",
+  version: "22.0.5",
+  ngImport: i0,
+  type: MatTooltip,
+  decorators: [{
+    type: Directive,
+    args: [{
+      selector: '[matTooltip]',
+      exportAs: 'matTooltip',
+      host: {
+        'class': 'mat-mdc-tooltip-trigger',
+        '[class.mat-mdc-tooltip-disabled]': 'disabled'
+      }
+    }]
+  }],
+  ctorParameters: () => [],
+  propDecorators: {
+    position: [{
+      type: Input,
+      args: ['matTooltipPosition']
+    }],
+    positionAtOrigin: [{
+      type: Input,
+      args: ['matTooltipPositionAtOrigin']
+    }],
+    disabled: [{
+      type: Input,
+      args: ['matTooltipDisabled']
+    }],
+    showDelay: [{
+      type: Input,
+      args: ['matTooltipShowDelay']
+    }],
+    hideDelay: [{
+      type: Input,
+      args: ['matTooltipHideDelay']
+    }],
+    touchGestures: [{
+      type: Input,
+      args: ['matTooltipTouchGestures']
+    }],
+    message: [{
+      type: Input,
+      args: ['matTooltip']
+    }],
+    tooltipClass: [{
+      type: Input,
+      args: ['matTooltipClass']
+    }]
+  }
+});
+class TooltipComponent {
+  _changeDetectorRef = inject(ChangeDetectorRef);
+  _elementRef = inject(ElementRef);
+  _isMultiline = false;
+  get message() {
+    return this._message;
+  }
+  set message(value) {
+    this._message = value ?? '';
+    this._updateMessageContent();
+  }
+  _message = '';
+  tooltipClass;
+  _showTimeoutId;
+  _hideTimeoutId;
+  _triggerElement;
+  _mouseLeaveHideDelay;
+  _animationsDisabled = _animationsDisabled();
+  _tooltip;
+  _container;
+  _closeOnInteraction = false;
+  _isVisible = false;
+  _onHide = new Subject();
+  _showAnimation = 'mat-mdc-tooltip-show';
+  _hideAnimation = 'mat-mdc-tooltip-hide';
+  show(delay) {
+    if (this._hideTimeoutId != null) {
+      clearTimeout(this._hideTimeoutId);
+    }
+    this._showTimeoutId = setTimeout(() => {
+      this._toggleVisibility(true);
+      this._showTimeoutId = undefined;
+    }, delay);
+  }
+  hide(delay) {
+    if (this._showTimeoutId != null) {
+      clearTimeout(this._showTimeoutId);
+    }
+    this._hideTimeoutId = setTimeout(() => {
+      this._toggleVisibility(false);
+      this._hideTimeoutId = undefined;
+    }, delay);
+  }
+  afterHidden() {
+    return this._onHide;
+  }
+  isVisible() {
+    return this._isVisible;
+  }
+  ngOnInit() {
+    this._updateMessageContent();
+  }
+  _updateMessageContent() {
+    if (this._container) {
+      this._container.nativeElement.innerHTML = this._message;
+    }
+  }
+  ngOnDestroy() {
+    this._cancelPendingAnimations();
+    this._onHide.complete();
+    this._triggerElement = null;
+  }
+  _handleBodyInteraction() {
+    if (this._closeOnInteraction) {
+      this.hide(0);
+    }
+  }
+  _markForCheck() {
+    this._changeDetectorRef.markForCheck();
+  }
+  _handleMouseLeave({
+    relatedTarget
+  }) {
+    if (!relatedTarget || !this._triggerElement.contains(relatedTarget)) {
+      if (this.isVisible()) {
+        this.hide(this._mouseLeaveHideDelay);
+      } else {
+        this._finalizeAnimation(false);
+      }
+    }
+  }
+  _onShow() {
+    this._isMultiline = this._isTooltipMultiline();
+    this._markForCheck();
+  }
+  _isTooltipMultiline() {
+    const rect = this._elementRef.nativeElement.getBoundingClientRect();
+    return rect.height > MIN_HEIGHT && rect.width >= MAX_WIDTH;
+  }
+  _handleAnimationEnd({
+    animationName
+  }) {
+    if (animationName === this._showAnimation || animationName === this._hideAnimation) {
+      this._finalizeAnimation(animationName === this._showAnimation);
+    }
+  }
+  _cancelPendingAnimations() {
+    if (this._showTimeoutId != null) {
+      clearTimeout(this._showTimeoutId);
+    }
+    if (this._hideTimeoutId != null) {
+      clearTimeout(this._hideTimeoutId);
+    }
+    this._showTimeoutId = this._hideTimeoutId = undefined;
+  }
+  _finalizeAnimation(toVisible) {
+    if (toVisible) {
+      this._closeOnInteraction = true;
+    } else if (!this.isVisible()) {
+      this._onHide.next();
+    }
+  }
+  _toggleVisibility(isVisible) {
+    const tooltip = this._tooltip.nativeElement;
+    const showClass = this._showAnimation;
+    const hideClass = this._hideAnimation;
+    tooltip.classList.remove(isVisible ? hideClass : showClass);
+    tooltip.classList.add(isVisible ? showClass : hideClass);
+    if (this._isVisible !== isVisible) {
+      this._isVisible = isVisible;
+      this._changeDetectorRef.markForCheck();
+    }
+    if (isVisible && !this._animationsDisabled && typeof getComputedStyle === 'function') {
+      const styles = getComputedStyle(tooltip);
+      if (styles.getPropertyValue('animation-duration') === '0s' || styles.getPropertyValue('animation-name') === 'none') {
+        this._animationsDisabled = true;
+      }
+    }
+    if (isVisible) {
+      this._onShow();
+    }
+    if (this._animationsDisabled) {
+      tooltip.classList.add('_mat-animation-noopable');
+      this._finalizeAnimation(isVisible);
+    }
+  }
+  static ɵfac = i0.ɵɵngDeclareFactory({
+    minVersion: "12.0.0",
+    version: "22.0.5",
+    ngImport: i0,
+    type: TooltipComponent,
+    deps: [],
+    target: i0.ɵɵFactoryTarget.Component
+  });
+  static ɵcmp = i0.ɵɵngDeclareComponent({
+    minVersion: "14.0.0",
+    version: "22.0.5",
+    type: TooltipComponent,
+    isStandalone: true,
+    selector: "mat-tooltip-component",
+    host: {
+      attributes: {
+        "aria-hidden": "true"
+      },
+      listeners: {
+        "mouseleave": "_handleMouseLeave($event)"
+      }
+    },
+    viewQueries: [{
+      propertyName: "_tooltip",
+      first: true,
+      predicate: ["tooltip"],
+      descendants: true,
+      static: true
+    }, {
+      propertyName: "_container",
+      first: true,
+      predicate: ["container"],
+      descendants: true,
+      static: true
+    }],
+    ngImport: i0,
+    template: "<div\n  #tooltip\n  class=\"mdc-tooltip mat-mdc-tooltip\"\n  [class]=\"tooltipClass\"\n  (animationend)=\"_handleAnimationEnd($event)\"\n  [class.mdc-tooltip--multiline]=\"_isMultiline\">\n  <div class=\"mat-mdc-tooltip-surface mdc-tooltip__surface\" #container></div>\n</div>\n",
+    styles: [".mat-mdc-tooltip {\n  position: relative;\n  transform: scale(0);\n  display: inline-flex;\n}\n.mat-mdc-tooltip::before {\n  content: \"\";\n  top: 0;\n  right: 0;\n  bottom: 0;\n  left: 0;\n  z-index: -1;\n  position: absolute;\n}\n.mat-mdc-tooltip-panel-below .mat-mdc-tooltip::before {\n  top: -8px;\n}\n.mat-mdc-tooltip-panel-above .mat-mdc-tooltip::before {\n  bottom: -8px;\n}\n.mat-mdc-tooltip-panel-right .mat-mdc-tooltip::before {\n  left: -8px;\n}\n.mat-mdc-tooltip-panel-left .mat-mdc-tooltip::before {\n  right: -8px;\n}\n.mat-mdc-tooltip._mat-animation-noopable {\n  animation: none;\n  transform: scale(1);\n}\n\n.mat-mdc-tooltip-surface {\n  word-break: normal;\n  overflow-wrap: anywhere;\n  padding: 4px 8px;\n  min-width: 40px;\n  max-width: 200px;\n  min-height: 24px;\n  max-height: 40vh;\n  box-sizing: border-box;\n  overflow: hidden;\n  text-align: center;\n  will-change: transform, opacity;\n  background-color: var(--mat-tooltip-container-color, var(--mat-sys-inverse-surface));\n  color: var(--mat-tooltip-supporting-text-color, var(--mat-sys-inverse-on-surface));\n  border-radius: var(--mat-tooltip-container-shape, var(--mat-sys-corner-extra-small));\n  font-family: var(--mat-tooltip-supporting-text-font, var(--mat-sys-body-small-font));\n  font-size: var(--mat-tooltip-supporting-text-size, var(--mat-sys-body-small-size));\n  font-weight: var(--mat-tooltip-supporting-text-weight, var(--mat-sys-body-small-weight));\n  line-height: var(--mat-tooltip-supporting-text-line-height, var(--mat-sys-body-small-line-height));\n  letter-spacing: var(--mat-tooltip-supporting-text-tracking, var(--mat-sys-body-small-tracking));\n}\n.mat-mdc-tooltip-surface::before {\n  position: absolute;\n  box-sizing: border-box;\n  width: 100%;\n  height: 100%;\n  top: 0;\n  left: 0;\n  border: 1px solid transparent;\n  border-radius: inherit;\n  content: \"\";\n  pointer-events: none;\n}\n.mdc-tooltip--multiline .mat-mdc-tooltip-surface {\n  text-align: left;\n}\n[dir=rtl] .mdc-tooltip--multiline .mat-mdc-tooltip-surface {\n  text-align: right;\n}\n\n.mat-mdc-tooltip-panel {\n  line-height: normal;\n}\n.mat-mdc-tooltip-panel.mat-mdc-tooltip-panel-non-interactive {\n  pointer-events: none;\n}\n\n@keyframes mat-mdc-tooltip-show {\n  0% {\n    opacity: 0;\n    transform: scale(0.8);\n  }\n  100% {\n    opacity: 1;\n    transform: scale(1);\n  }\n}\n@keyframes mat-mdc-tooltip-hide {\n  0% {\n    opacity: 1;\n    transform: scale(1);\n  }\n  100% {\n    opacity: 0;\n    transform: scale(0.8);\n  }\n}\n.mat-mdc-tooltip-show {\n  animation: mat-mdc-tooltip-show 150ms cubic-bezier(0, 0, 0.2, 1) forwards;\n}\n\n.mat-mdc-tooltip-hide {\n  animation: mat-mdc-tooltip-hide 75ms cubic-bezier(0.4, 0, 1, 1) forwards;\n}\n"],
+    encapsulation: i0.ViewEncapsulation.None
+  });
+}
+i0.ɵɵngDeclareClassMetadata({
+  minVersion: "12.0.0",
+  version: "22.0.5",
+  ngImport: i0,
+  type: TooltipComponent,
+  decorators: [{
+    type: Component,
+    args: [{
+      selector: 'mat-tooltip-component',
+      encapsulation: ViewEncapsulation.None,
+      host: {
+        '(mouseleave)': '_handleMouseLeave($event)',
+        'aria-hidden': 'true'
+      },
+      template: "<div\n  #tooltip\n  class=\"mdc-tooltip mat-mdc-tooltip\"\n  [class]=\"tooltipClass\"\n  (animationend)=\"_handleAnimationEnd($event)\"\n  [class.mdc-tooltip--multiline]=\"_isMultiline\">\n  <div class=\"mat-mdc-tooltip-surface mdc-tooltip__surface\" #container></div>\n</div>\n",
+      styles: [".mat-mdc-tooltip {\n  position: relative;\n  transform: scale(0);\n  display: inline-flex;\n}\n.mat-mdc-tooltip::before {\n  content: \"\";\n  top: 0;\n  right: 0;\n  bottom: 0;\n  left: 0;\n  z-index: -1;\n  position: absolute;\n}\n.mat-mdc-tooltip-panel-below .mat-mdc-tooltip::before {\n  top: -8px;\n}\n.mat-mdc-tooltip-panel-above .mat-mdc-tooltip::before {\n  bottom: -8px;\n}\n.mat-mdc-tooltip-panel-right .mat-mdc-tooltip::before {\n  left: -8px;\n}\n.mat-mdc-tooltip-panel-left .mat-mdc-tooltip::before {\n  right: -8px;\n}\n.mat-mdc-tooltip._mat-animation-noopable {\n  animation: none;\n  transform: scale(1);\n}\n\n.mat-mdc-tooltip-surface {\n  word-break: normal;\n  overflow-wrap: anywhere;\n  padding: 4px 8px;\n  min-width: 40px;\n  max-width: 200px;\n  min-height: 24px;\n  max-height: 40vh;\n  box-sizing: border-box;\n  overflow: hidden;\n  text-align: center;\n  will-change: transform, opacity;\n  background-color: var(--mat-tooltip-container-color, var(--mat-sys-inverse-surface));\n  color: var(--mat-tooltip-supporting-text-color, var(--mat-sys-inverse-on-surface));\n  border-radius: var(--mat-tooltip-container-shape, var(--mat-sys-corner-extra-small));\n  font-family: var(--mat-tooltip-supporting-text-font, var(--mat-sys-body-small-font));\n  font-size: var(--mat-tooltip-supporting-text-size, var(--mat-sys-body-small-size));\n  font-weight: var(--mat-tooltip-supporting-text-weight, var(--mat-sys-body-small-weight));\n  line-height: var(--mat-tooltip-supporting-text-line-height, var(--mat-sys-body-small-line-height));\n  letter-spacing: var(--mat-tooltip-supporting-text-tracking, var(--mat-sys-body-small-tracking));\n}\n.mat-mdc-tooltip-surface::before {\n  position: absolute;\n  box-sizing: border-box;\n  width: 100%;\n  height: 100%;\n  top: 0;\n  left: 0;\n  border: 1px solid transparent;\n  border-radius: inherit;\n  content: \"\";\n  pointer-events: none;\n}\n.mdc-tooltip--multiline .mat-mdc-tooltip-surface {\n  text-align: left;\n}\n[dir=rtl] .mdc-tooltip--multiline .mat-mdc-tooltip-surface {\n  text-align: right;\n}\n\n.mat-mdc-tooltip-panel {\n  line-height: normal;\n}\n.mat-mdc-tooltip-panel.mat-mdc-tooltip-panel-non-interactive {\n  pointer-events: none;\n}\n\n@keyframes mat-mdc-tooltip-show {\n  0% {\n    opacity: 0;\n    transform: scale(0.8);\n  }\n  100% {\n    opacity: 1;\n    transform: scale(1);\n  }\n}\n@keyframes mat-mdc-tooltip-hide {\n  0% {\n    opacity: 1;\n    transform: scale(1);\n  }\n  100% {\n    opacity: 0;\n    transform: scale(0.8);\n  }\n}\n.mat-mdc-tooltip-show {\n  animation: mat-mdc-tooltip-show 150ms cubic-bezier(0, 0, 0.2, 1) forwards;\n}\n\n.mat-mdc-tooltip-hide {\n  animation: mat-mdc-tooltip-hide 75ms cubic-bezier(0.4, 0, 1, 1) forwards;\n}\n"]
+    }]
+  }],
+  propDecorators: {
+    _tooltip: [{
+      type: ViewChild,
+      args: ['tooltip', {
+        static: true
+      }]
+    }],
+    _container: [{
+      type: ViewChild,
+      args: ['container', {
+        static: true
+      }]
+    }]
+  }
+});
+
+export { MAT_TOOLTIP_DEFAULT_OPTIONS, MAT_TOOLTIP_SCROLL_STRATEGY, MatTooltip, SCROLL_THROTTLE_MS, TOOLTIP_PANEL_CLASS, TooltipComponent, getMatTooltipInvalidPositionError };
+//# sourceMappingURL=_tooltip-chunk.mjs.map
