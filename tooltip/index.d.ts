@@ -17,7 +17,6 @@ import { InjectionToken } from '@angular/core';
 import { NgZone } from '@angular/core';
 import { NumberInput } from '@angular/cdk/coercion';
 import { Observable } from 'rxjs';
-import { OnChanges } from '@angular/core';
 import { OnDestroy } from '@angular/core';
 import { OnInit } from '@angular/core';
 import { OriginConnectionPosition } from '@angular/cdk/overlay';
@@ -27,7 +26,6 @@ import { OverlayRef } from '@angular/cdk/overlay';
 import { Platform } from '@angular/cdk/platform';
 import { ScrollDispatcher } from '@angular/cdk/overlay';
 import { ScrollStrategy } from '@angular/cdk/overlay';
-import { SimpleChanges } from '@angular/core';
 import { ViewContainerRef } from '@angular/core';
 
 /**
@@ -80,7 +78,7 @@ export declare const MAT_TOOLTIP_SCROLL_STRATEGY_FACTORY_PROVIDER: {
  *
  * https://material.io/design/components/tooltips.html
  */
-export declare class MatTooltip implements OnChanges, OnDestroy, AfterViewInit {
+export declare class MatTooltip implements OnDestroy, AfterViewInit {
     private _overlay;
     private _elementRef;
     private _scrollDispatcher;
@@ -145,6 +143,8 @@ export declare class MatTooltip implements OnChanges, OnDestroy, AfterViewInit {
     get message(): string;
     set message(value: string | null | undefined);
     private _message;
+    /** Plain-text version of the message, used for the ARIA description. */
+    private _ariaMessage;
     /** Classes to be passed to the tooltip. Supports the same syntax as `ngClass`. */
     get tooltipClass(): string | string[] | Set<string> | {
         [key: string]: any;
@@ -163,7 +163,6 @@ export declare class MatTooltip implements OnChanges, OnDestroy, AfterViewInit {
     private _injector;
     constructor(_overlay: Overlay, _elementRef: ElementRef<HTMLElement>, _scrollDispatcher: ScrollDispatcher, _viewContainerRef: ViewContainerRef, _ngZone: NgZone, _platform: Platform, _ariaDescriber: AriaDescriber, _focusMonitor: FocusMonitor, scrollStrategy: any, _dir: Directionality, _defaultOptions: MatTooltipDefaultOptions, _document: any);
     ngAfterViewInit(): void;
-    ngOnChanges(changes: SimpleChanges): void;
     /**
      * Dispose the tooltip when destroyed.
      */
@@ -286,8 +285,10 @@ export declare class TooltipComponent implements OnInit, OnDestroy {
     private _changeDetectorRef;
     protected _elementRef: ElementRef<HTMLElement>;
     _isMultiline: boolean;
-    /** Message to display in the tooltip */
-    message: string;
+    /** Message to display in the tooltip. Already sanitized by `MatTooltip`. */
+    get message(): string;
+    set message(value: string);
+    private _message;
     /** Classes to be added to the tooltip. Supports the same syntax as `ngClass`. */
     tooltipClass: string | string[] | Set<string> | {
         [key: string]: any;
@@ -332,6 +333,13 @@ export declare class TooltipComponent implements OnInit, OnDestroy {
     /** Whether the tooltip is being displayed. */
     isVisible(): boolean;
     ngOnInit(): void;
+    /**
+     * Renders the message into the tooltip surface. The message is sanitized by
+     * `MatTooltip` with the fork's SVG-preserving sanitizer; it cannot go through
+     * an Angular binding or `Renderer2` because Angular's own sanitizer would
+     * strip the SVG content again.
+     */
+    private _updateMessageContent;
     ngOnDestroy(): void;
     /**
      * Interactions on the HTML body should close the tooltip immediately as defined in the

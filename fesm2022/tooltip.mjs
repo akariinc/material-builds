@@ -17,16 +17,146 @@ import { trigger, state, style, transition, animate } from '@angular/animations'
 import { CdkScrollableModule } from '@angular/cdk/scrolling';
 import { MatCommonModule } from '@angular/material/core';
 
-/** Function to sanitize HTML while keeping &lt;svg&gt; */
+/**
+ * DOM-based HTML sanitizer that preserves inline SVG.
+ *
+ * Angular's built-in sanitizer strips SVG elements, which is the reason this fork
+ * exists. This implementation follows the same architecture as Angular's sanitizer
+ * (parse into an inert document, walk the tree, keep only allowlisted elements and
+ * attributes, validate URL-valued attributes) instead of regex rewriting, which is
+ * bypassable (unquoted event handlers, unclosed tags, entity-encoded URLs, etc.).
+ *
+ * Intentionally NOT allowed: script, style, iframe, object, embed, form, meta,
+ * link, base, template, math, foreignObject (mXSS vector), SMIL animation
+ * elements (attribute-injection vector, e.g. `<animate attributeName="href">`).
+ */
+/** HTML elements that are safe to keep (same set Angular's sanitizer allows). */
+const HTML_ELEMENTS = 'address,article,aside,blockquote,caption,center,del,details,dialog,dir,div,dl,dd,dt,' +
+    'figure,figcaption,footer,h1,h2,h3,h4,h5,h6,header,hgroup,hr,ins,main,map,menu,nav,ol,' +
+    'li,ul,pre,section,summary,table,tbody,td,tfoot,th,thead,tr,a,abbr,acronym,audio,b,bdi,' +
+    'bdo,big,br,cite,code,em,font,i,img,kbd,label,mark,picture,q,rp,rt,ruby,s,samp,small,' +
+    'source,span,strike,strong,sub,sup,time,track,tt,u,var,video';
+/** SVG elements that are safe to keep. */
+const SVG_ELEMENTS = 'svg,circle,clippath,defs,desc,ellipse,filter,feblend,fecolormatrix,fecomponenttransfer,' +
+    'fecomposite,feconvolvematrix,fediffuselighting,fedisplacementmap,fedistantlight,' +
+    'fedropshadow,feflood,fefunca,fefuncb,fefuncg,fefuncr,fegaussianblur,femerge,femergenode,' +
+    'femorphology,feoffset,fepointlight,fespecularlighting,fespotlight,fetile,feturbulence,' +
+    'g,image,line,lineargradient,marker,mask,path,pattern,polygon,polyline,radialgradient,' +
+    'rect,stop,switch,symbol,text,textpath,title,tspan,use,view';
+/** Attributes whose value is a URL and must match a safe pattern. */
+const URL_ATTRIBUTES = 'background,cite,href,longdesc,src,xlink:href,xml:base';
+/** Non-URL attributes that are safe to keep (HTML + SVG presentation attributes). */
+const SAFE_ATTRIBUTES = 'abbr,accesskey,align,alt,autoplay,axis,bgcolor,border,cellpadding,cellspacing,class,clear,' +
+    'color,cols,colspan,compact,controls,coords,datetime,dir,download,face,headers,height,' +
+    'hidden,hreflang,hspace,ismap,itemprop,itemscope,lang,language,loop,media,muted,nohref,' +
+    'nowrap,open,preload,rel,rev,role,rows,rowspan,rules,scope,scrolling,shape,size,sizes,span,' +
+    'srclang,srcset,start,style,summary,tabindex,target,title,translate,type,usemap,valign,' +
+    'value,vspace,width,' +
+    // SVG presentation and geometry attributes.
+    'accent-height,alignment-baseline,baseline-shift,baseprofile,bbox,cap-height,clip,' +
+    'clip-path,clip-rule,clippathunits,color-interpolation,color-interpolation-filters,' +
+    'color-profile,color-rendering,cursor,cx,cy,d,direction,display,dominant-baseline,dx,dy,' +
+    'fill,fill-opacity,fill-rule,filterunits,flood-color,flood-opacity,font-family,font-size,' +
+    'font-size-adjust,font-stretch,font-style,font-variant,font-weight,fx,fy,' +
+    'glyph-orientation-horizontal,glyph-orientation-vertical,gradienttransform,gradientunits,' +
+    'image-rendering,in,in2,k1,k2,k3,k4,kerning,letter-spacing,lighting-color,marker-end,' +
+    'marker-mid,marker-start,markerheight,markerunits,markerwidth,mask,maskcontentunits,' +
+    'maskunits,mode,offset,opacity,operator,order,orient,overflow,paint-order,pathlength,' +
+    'patterncontentunits,patterntransform,patternunits,points,preserveaspectratio,r,radius,' +
+    'refx,refy,repeatcount,repeatdur,requiredextensions,requiredfeatures,restart,result,rotate,' +
+    'rx,ry,scale,seed,shape-rendering,spreadmethod,startoffset,stddeviation,stop-color,' +
+    'stop-opacity,stroke,stroke-dasharray,stroke-dashoffset,stroke-linecap,stroke-linejoin,' +
+    'stroke-miterlimit,stroke-opacity,stroke-width,systemlanguage,text-anchor,text-decoration,' +
+    'text-rendering,transform,transform-origin,u1,u2,unicode-bidi,vector-effect,version,' +
+    'viewbox,visibility,white-space,word-spacing,writing-mode,x,x1,x2,xmlns,xmlns:xlink,' +
+    'xml:lang,xml:space,y,y1,y2,zoomandpan';
+const toSet = (csv) => new Set(csv.split(','));
+const ALLOWED_ELEMENTS = toSet(HTML_ELEMENTS + ',' + SVG_ELEMENTS);
+const ALLOWED_ATTRIBUTES = toSet(SAFE_ATTRIBUTES);
+const URL_ATTRIBUTE_SET = toSet(URL_ATTRIBUTES);
+/**
+ * Safe URL pattern (same as Angular's): allows http(s), mailto, ftp, tel, sms
+ * and relative URLs; rejects `javascript:`, `vbscript:` and other schemes.
+ */
+const SAFE_URL_PATTERN = /^(?:(?:https?|mailto|ftp|tel|file|sms):|[^&:/?#]*(?:[/?#]|$))/i;
+/** Safe `data:` URL pattern (same as Angular's): base64 image/video/audio only. */
+const DATA_URL_PATTERN = /^data:(?:image\/(?:bmp|gif|jpeg|jpg|png|tiff|webp)|video\/(?:mpeg|mp4|ogg|webm)|audio\/(?:mp3|oga|ogg|opus));base64,[a-z0-9+/]+=*$/i;
+const isSafeUrl = (value) => {
+    const url = value.trim();
+    return SAFE_URL_PATTERN.test(url) || DATA_URL_PATTERN.test(url);
+};
+const escapeHtml = (text) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+/** Parses HTML into an inert document so nothing executes or loads while sanitizing. */
+const parseInert = (html) => {
+    if (typeof DOMParser !== 'undefined') {
+        return new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html').body;
+    }
+    if (typeof document !== 'undefined') {
+        const inertDocument = document.implementation.createHTMLDocument('sanitization');
+        inertDocument.body.innerHTML = html;
+        return inertDocument.body;
+    }
+    return null;
+};
+const sanitizeAttributes = (element) => {
+    const isUseElement = element.nodeName.toLowerCase() === 'use';
+    for (const attribute of Array.from(element.attributes)) {
+        const name = attribute.name.toLowerCase();
+        if (URL_ATTRIBUTE_SET.has(name)) {
+            // `<use>` may only reference same-document fragments; external or data:
+            // references are a known SVG attack vector.
+            const safe = isUseElement
+                ? attribute.value.trim().startsWith('#')
+                : isSafeUrl(attribute.value);
+            if (!safe) {
+                element.removeAttribute(attribute.name);
+            }
+        }
+        else if (name.startsWith('on') || !ALLOWED_ATTRIBUTES.has(name)) {
+            element.removeAttribute(attribute.name);
+        }
+    }
+};
+const sanitizeChildren = (node) => {
+    for (const child of Array.from(node.childNodes)) {
+        if (child.nodeType === 1 /* ELEMENT_NODE */) {
+            const element = child;
+            if (!ALLOWED_ELEMENTS.has(element.nodeName.toLowerCase())) {
+                // Drop disallowed elements entirely, including their subtree.
+                node.removeChild(child);
+                continue;
+            }
+            sanitizeAttributes(element);
+            sanitizeChildren(element);
+        }
+        else if (child.nodeType !== 3 /* TEXT_NODE */) {
+            // Remove comments, CDATA and processing instructions — all are mXSS vectors.
+            node.removeChild(child);
+        }
+    }
+};
+/** Sanitizes an HTML string while keeping inline `<svg>` content. */
 const sanitizeHtml = (html) => {
-    /** Remove &lt;script&gt;, &lt;iframe&gt;, &lt;object&gt;, &lt;embed&gt;, &lt;form&gt;, &lt;style&gt;, &lt;meta&gt;, &lt;link&gt;, &lt;base&gt; */
-    html = html.replace(/<(script|iframe|object|embed|form|meta|style|link|base)[^>]*>[\s\S]*?<\/\1>/gi, '');
-    // Remove dangerous attributes (onX events, javascript: links)
-    html = html.replace(/\son\w+="[^"]*"/gi, ''); // Remove event handlers (e.g., onclick)
-    html = html.replace(/\son\w+='[^']*'/gi, ''); // Remove event handlers (single quotes)
-    html = html.replace(/\shref=['"](javascript:)[^'"]*['"]/gi, 'href="#"'); // Prevent javascript: links
-    html = html.replace(/\ssrc=['"](javascript:)[^'"]*['"]/gi, ''); // Prevent javascript: in src
-    return html;
+    if (!html) {
+        return '';
+    }
+    const body = parseInert(html);
+    if (body === null) {
+        // No DOM available (e.g. server-side rendering): render as plain text.
+        return escapeHtml(html);
+    }
+    sanitizeChildren(body);
+    return body.innerHTML;
+};
+/** Extracts the plain text of an HTML string (e.g. for ARIA descriptions). */
+const htmlToPlainText = (html) => {
+    if (!html) {
+        return '';
+    }
+    const body = parseInert(html);
+    return (body === null ? html.replace(/<[^>]*>/g, ' ') : body.textContent || '')
+        .replace(/\s+/g, ' ')
+        .trim();
 };
 
 /** Time in ms to throttle repositioning after scroll events. */
@@ -132,7 +262,7 @@ class MatTooltip {
             else {
                 this._setupPointerEnterEventsIfNeeded();
             }
-            this._syncAriaDescription(this.message);
+            this._syncAriaDescription(this._ariaMessage);
         }
     }
     /** The default delay in ms before showing the tooltip after show is called */
@@ -157,13 +287,14 @@ class MatTooltip {
         return this._message;
     }
     set message(value) {
-        const oldMessage = this._message;
+        const oldAriaMessage = this._ariaMessage;
         // If the message is not a string (e.g. number), convert it to a string and trim it.
         // Must convert with `String(value)`, not `${value}`, otherwise Closure Compiler optimises
         // away the string-conversion: https://github.com/angular/components/issues/20684
-        // Use SecurityContext.HTML to Allow SVG
-        this._message = sanitizeHtml(value != null ? String(value).trim() : '') || '';
-        // this._message = value != null ? String(value).trim() : '';
+        // The message is rendered as HTML by `TooltipComponent` (fork change to support
+        // inline SVG), so it has to be sanitized here with the SVG-preserving sanitizer.
+        this._message = sanitizeHtml(value != null ? String(value).trim() : '');
+        this._ariaMessage = htmlToPlainText(this._message);
         if (!this._message && this._isTooltipVisible()) {
             this.hide(0);
         }
@@ -171,7 +302,7 @@ class MatTooltip {
             this._setupPointerEnterEventsIfNeeded();
             this._updateTooltipMessage();
         }
-        this._syncAriaDescription(oldMessage);
+        this._syncAriaDescription(oldAriaMessage);
     }
     /** Classes to be passed to the tooltip. Supports the same syntax as `ngClass`. */
     get tooltipClass() {
@@ -218,6 +349,8 @@ class MatTooltip {
          */
         this.touchGestures = 'auto';
         this._message = '';
+        /** Plain-text version of the message, used for the ARIA description. */
+        this._ariaMessage = '';
         /** Manually-bound passive event listeners. */
         this._passiveListeners = [];
         /** Timer started at the last `touchstart` event. */
@@ -267,11 +400,6 @@ class MatTooltip {
             }
         });
     }
-    ngOnChanges(changes) {
-        if ('message' in changes) {
-            this.message = changes['message'].currentValue;
-        }
-    }
     /**
      * Dispose the tooltip when destroyed.
      */
@@ -292,7 +420,7 @@ class MatTooltip {
         this._passiveListeners.length = 0;
         this._destroyed.next();
         this._destroyed.complete();
-        this._ariaDescriber.removeDescription(nativeElement, this.message, 'tooltip');
+        this._ariaDescriber.removeDescription(nativeElement, this._ariaMessage, 'tooltip');
         this._focusMonitor.stopMonitoring(nativeElement);
     }
     /** Shows the tooltip after the delay in ms, defaults to tooltip-delay-show or 0ms if no input */
@@ -701,14 +829,14 @@ class MatTooltip {
             // issue by deferring the description by a tick so Angular has time to set the `aria-label`.
             Promise.resolve().then(() => {
                 this._ariaDescriptionPending = false;
-                if (this.message && !this.disabled) {
-                    this._ariaDescriber.describe(this._elementRef.nativeElement, this.message, 'tooltip');
+                if (this._ariaMessage && !this.disabled) {
+                    this._ariaDescriber.describe(this._elementRef.nativeElement, this._ariaMessage, 'tooltip');
                 }
             });
         });
     }
     static { this.ɵfac = i0.ɵɵngDeclareFactory({ minVersion: "12.0.0", version: "18.2.0-next.2", ngImport: i0, type: MatTooltip, deps: [{ token: i1.Overlay }, { token: i0.ElementRef }, { token: i1.ScrollDispatcher }, { token: i0.ViewContainerRef }, { token: i0.NgZone }, { token: i2.Platform }, { token: i3.AriaDescriber }, { token: i3.FocusMonitor }, { token: MAT_TOOLTIP_SCROLL_STRATEGY }, { token: i4.Directionality }, { token: MAT_TOOLTIP_DEFAULT_OPTIONS, optional: true }, { token: DOCUMENT }], target: i0.ɵɵFactoryTarget.Directive }); }
-    static { this.ɵdir = i0.ɵɵngDeclareDirective({ minVersion: "14.0.0", version: "18.2.0-next.2", type: MatTooltip, isStandalone: true, selector: "[matTooltip]", inputs: { position: ["matTooltipPosition", "position"], positionAtOrigin: ["matTooltipPositionAtOrigin", "positionAtOrigin"], disabled: ["matTooltipDisabled", "disabled"], showDelay: ["matTooltipShowDelay", "showDelay"], hideDelay: ["matTooltipHideDelay", "hideDelay"], touchGestures: ["matTooltipTouchGestures", "touchGestures"], message: ["matTooltip", "message"], tooltipClass: ["matTooltipClass", "tooltipClass"] }, host: { properties: { "class.mat-mdc-tooltip-disabled": "disabled" }, classAttribute: "mat-mdc-tooltip-trigger" }, exportAs: ["matTooltip"], usesOnChanges: true, ngImport: i0 }); }
+    static { this.ɵdir = i0.ɵɵngDeclareDirective({ minVersion: "14.0.0", version: "18.2.0-next.2", type: MatTooltip, isStandalone: true, selector: "[matTooltip]", inputs: { position: ["matTooltipPosition", "position"], positionAtOrigin: ["matTooltipPositionAtOrigin", "positionAtOrigin"], disabled: ["matTooltipDisabled", "disabled"], showDelay: ["matTooltipShowDelay", "showDelay"], hideDelay: ["matTooltipHideDelay", "hideDelay"], touchGestures: ["matTooltipTouchGestures", "touchGestures"], message: ["matTooltip", "message"], tooltipClass: ["matTooltipClass", "tooltipClass"] }, host: { properties: { "class.mat-mdc-tooltip-disabled": "disabled" }, classAttribute: "mat-mdc-tooltip-trigger" }, exportAs: ["matTooltip"], ngImport: i0 }); }
 }
 i0.ɵɵngDeclareClassMetadata({ minVersion: "12.0.0", version: "18.2.0-next.2", ngImport: i0, type: MatTooltip, decorators: [{
             type: Directive,
@@ -762,11 +890,20 @@ i0.ɵɵngDeclareClassMetadata({ minVersion: "12.0.0", version: "18.2.0-next.2", 
  * @docs-private
  */
 class TooltipComponent {
+    /** Message to display in the tooltip. Already sanitized by `MatTooltip`. */
+    get message() {
+        return this._message;
+    }
+    set message(value) {
+        this._message = value ?? '';
+        this._updateMessageContent();
+    }
     constructor(_changeDetectorRef, _elementRef, animationMode) {
         this._changeDetectorRef = _changeDetectorRef;
         this._elementRef = _elementRef;
         /* Whether the tooltip text overflows to multiple lines */
         this._isMultiline = false;
+        this._message = '';
         /** Whether interactions on the page should close the tooltip */
         this._closeOnInteraction = false;
         /** Whether the tooltip is currently visible. */
@@ -816,11 +953,18 @@ class TooltipComponent {
         return this._isVisible;
     }
     ngOnInit() {
-        // The angular sanitizer not used to validate svg content here.
-        // only customSanitizer is validating in matTooltip Directive.
-        // So using renderer will fail with validation
-        // this._renderer.setProperty(this._container.nativeElement, 'innerHTML', this.message);
-        this._container.nativeElement.innerHTML = this.message;
+        this._updateMessageContent();
+    }
+    /**
+     * Renders the message into the tooltip surface. The message is sanitized by
+     * `MatTooltip` with the fork's SVG-preserving sanitizer; it cannot go through
+     * an Angular binding or `Renderer2` because Angular's own sanitizer would
+     * strip the SVG content again.
+     */
+    _updateMessageContent() {
+        if (this._container) {
+            this._container.nativeElement.innerHTML = this._message;
+        }
     }
     ngOnDestroy() {
         this._cancelPendingAnimations();
@@ -927,14 +1071,14 @@ class TooltipComponent {
         }
     }
     static { this.ɵfac = i0.ɵɵngDeclareFactory({ minVersion: "12.0.0", version: "18.2.0-next.2", ngImport: i0, type: TooltipComponent, deps: [{ token: i0.ChangeDetectorRef }, { token: i0.ElementRef }, { token: ANIMATION_MODULE_TYPE, optional: true }], target: i0.ɵɵFactoryTarget.Component }); }
-    static { this.ɵcmp = i0.ɵɵngDeclareComponent({ minVersion: "14.0.0", version: "18.2.0-next.2", type: TooltipComponent, isStandalone: true, selector: "mat-tooltip-component", host: { attributes: { "aria-hidden": "true" }, listeners: { "mouseleave": "_handleMouseLeave($event)" } }, viewQueries: [{ propertyName: "_tooltip", first: true, predicate: ["tooltip"], descendants: true, static: true }, { propertyName: "_container", first: true, predicate: ["container"], descendants: true, static: true }], ngImport: i0, template: "<div\n  #tooltip\n  class=\"mdc-tooltip mat-mdc-tooltip\"\n  [ngClass]=\"tooltipClass\"\n  (animationend)=\"_handleAnimationEnd($event)\"\n  [class.mdc-tooltip--multiline]=\"_isMultiline\">\n  <div #container></div>\n</div>\n", styles: [".mat-mdc-tooltip{position:relative;transform:scale(0);display:inline-flex}.mat-mdc-tooltip::before{content:\"\";top:0;right:0;bottom:0;left:0;z-index:-1;position:absolute}.mat-mdc-tooltip-panel-below .mat-mdc-tooltip::before{top:-8px}.mat-mdc-tooltip-panel-above .mat-mdc-tooltip::before{bottom:-8px}.mat-mdc-tooltip-panel-right .mat-mdc-tooltip::before{left:-8px}.mat-mdc-tooltip-panel-left .mat-mdc-tooltip::before{right:-8px}.mat-mdc-tooltip._mat-animation-noopable{animation:none;transform:scale(1)}.mat-mdc-tooltip-surface{word-break:normal;overflow-wrap:anywhere;padding:4px 8px;min-width:40px;max-width:200px;min-height:24px;max-height:40vh;box-sizing:border-box;overflow:hidden;text-align:center;will-change:transform,opacity;background-color:var(--mdc-plain-tooltip-container-color, var(--mat-app-inverse-surface));color:var(--mdc-plain-tooltip-supporting-text-color, var(--mat-app-inverse-on-surface));border-radius:var(--mdc-plain-tooltip-container-shape, var(--mat-app-corner-extra-small));font-family:var(--mdc-plain-tooltip-supporting-text-font, var(--mat-app-body-small-font));font-size:var(--mdc-plain-tooltip-supporting-text-size, var(--mat-app-body-small-size));font-weight:var(--mdc-plain-tooltip-supporting-text-weight, var(--mat-app-body-small-weight));line-height:var(--mdc-plain-tooltip-supporting-text-line-height, var(--mat-app-body-small-line-height));letter-spacing:var(--mdc-plain-tooltip-supporting-text-tracking, var(--mat-app-body-small-tracking))}.mat-mdc-tooltip-surface::before{position:absolute;box-sizing:border-box;width:100%;height:100%;top:0;left:0;border:1px solid rgba(0,0,0,0);border-radius:inherit;content:\"\";pointer-events:none}.mdc-tooltip--multiline .mat-mdc-tooltip-surface{text-align:left}[dir=rtl] .mdc-tooltip--multiline .mat-mdc-tooltip-surface{text-align:right}.mat-mdc-tooltip-panel.mat-mdc-tooltip-panel-non-interactive{pointer-events:none}@keyframes mat-mdc-tooltip-show{0%{opacity:0;transform:scale(0.8)}100%{opacity:1;transform:scale(1)}}@keyframes mat-mdc-tooltip-hide{0%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(0.8)}}.mat-mdc-tooltip-show{animation:mat-mdc-tooltip-show 150ms cubic-bezier(0, 0, 0.2, 1) forwards}.mat-mdc-tooltip-hide{animation:mat-mdc-tooltip-hide 75ms cubic-bezier(0.4, 0, 1, 1) forwards}"], dependencies: [{ kind: "directive", type: NgClass, selector: "[ngClass]", inputs: ["class", "ngClass"] }], changeDetection: i0.ChangeDetectionStrategy.OnPush, encapsulation: i0.ViewEncapsulation.None }); }
+    static { this.ɵcmp = i0.ɵɵngDeclareComponent({ minVersion: "14.0.0", version: "18.2.0-next.2", type: TooltipComponent, isStandalone: true, selector: "mat-tooltip-component", host: { attributes: { "aria-hidden": "true" }, listeners: { "mouseleave": "_handleMouseLeave($event)" } }, viewQueries: [{ propertyName: "_tooltip", first: true, predicate: ["tooltip"], descendants: true, static: true }, { propertyName: "_container", first: true, predicate: ["container"], descendants: true, static: true }], ngImport: i0, template: "<div\n  #tooltip\n  class=\"mdc-tooltip mat-mdc-tooltip\"\n  [ngClass]=\"tooltipClass\"\n  (animationend)=\"_handleAnimationEnd($event)\"\n  [class.mdc-tooltip--multiline]=\"_isMultiline\">\n  <div class=\"mat-mdc-tooltip-surface mdc-tooltip__surface\" #container></div>\n</div>\n", styles: [".mat-mdc-tooltip{position:relative;transform:scale(0);display:inline-flex}.mat-mdc-tooltip::before{content:\"\";top:0;right:0;bottom:0;left:0;z-index:-1;position:absolute}.mat-mdc-tooltip-panel-below .mat-mdc-tooltip::before{top:-8px}.mat-mdc-tooltip-panel-above .mat-mdc-tooltip::before{bottom:-8px}.mat-mdc-tooltip-panel-right .mat-mdc-tooltip::before{left:-8px}.mat-mdc-tooltip-panel-left .mat-mdc-tooltip::before{right:-8px}.mat-mdc-tooltip._mat-animation-noopable{animation:none;transform:scale(1)}.mat-mdc-tooltip-surface{word-break:normal;overflow-wrap:anywhere;padding:4px 8px;min-width:40px;max-width:200px;min-height:24px;max-height:40vh;box-sizing:border-box;overflow:hidden;text-align:center;will-change:transform,opacity;background-color:var(--mdc-plain-tooltip-container-color, var(--mat-app-inverse-surface));color:var(--mdc-plain-tooltip-supporting-text-color, var(--mat-app-inverse-on-surface));border-radius:var(--mdc-plain-tooltip-container-shape, var(--mat-app-corner-extra-small));font-family:var(--mdc-plain-tooltip-supporting-text-font, var(--mat-app-body-small-font));font-size:var(--mdc-plain-tooltip-supporting-text-size, var(--mat-app-body-small-size));font-weight:var(--mdc-plain-tooltip-supporting-text-weight, var(--mat-app-body-small-weight));line-height:var(--mdc-plain-tooltip-supporting-text-line-height, var(--mat-app-body-small-line-height));letter-spacing:var(--mdc-plain-tooltip-supporting-text-tracking, var(--mat-app-body-small-tracking))}.mat-mdc-tooltip-surface::before{position:absolute;box-sizing:border-box;width:100%;height:100%;top:0;left:0;border:1px solid rgba(0,0,0,0);border-radius:inherit;content:\"\";pointer-events:none}.mdc-tooltip--multiline .mat-mdc-tooltip-surface{text-align:left}[dir=rtl] .mdc-tooltip--multiline .mat-mdc-tooltip-surface{text-align:right}.mat-mdc-tooltip-panel.mat-mdc-tooltip-panel-non-interactive{pointer-events:none}@keyframes mat-mdc-tooltip-show{0%{opacity:0;transform:scale(0.8)}100%{opacity:1;transform:scale(1)}}@keyframes mat-mdc-tooltip-hide{0%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(0.8)}}.mat-mdc-tooltip-show{animation:mat-mdc-tooltip-show 150ms cubic-bezier(0, 0, 0.2, 1) forwards}.mat-mdc-tooltip-hide{animation:mat-mdc-tooltip-hide 75ms cubic-bezier(0.4, 0, 1, 1) forwards}"], dependencies: [{ kind: "directive", type: NgClass, selector: "[ngClass]", inputs: ["class", "ngClass"] }], changeDetection: i0.ChangeDetectionStrategy.OnPush, encapsulation: i0.ViewEncapsulation.None }); }
 }
 i0.ɵɵngDeclareClassMetadata({ minVersion: "12.0.0", version: "18.2.0-next.2", ngImport: i0, type: TooltipComponent, decorators: [{
             type: Component,
             args: [{ selector: 'mat-tooltip-component', encapsulation: ViewEncapsulation.None, changeDetection: ChangeDetectionStrategy.OnPush, host: {
                         '(mouseleave)': '_handleMouseLeave($event)',
                         'aria-hidden': 'true',
-                    }, standalone: true, imports: [NgClass], template: "<div\n  #tooltip\n  class=\"mdc-tooltip mat-mdc-tooltip\"\n  [ngClass]=\"tooltipClass\"\n  (animationend)=\"_handleAnimationEnd($event)\"\n  [class.mdc-tooltip--multiline]=\"_isMultiline\">\n  <div #container></div>\n</div>\n", styles: [".mat-mdc-tooltip{position:relative;transform:scale(0);display:inline-flex}.mat-mdc-tooltip::before{content:\"\";top:0;right:0;bottom:0;left:0;z-index:-1;position:absolute}.mat-mdc-tooltip-panel-below .mat-mdc-tooltip::before{top:-8px}.mat-mdc-tooltip-panel-above .mat-mdc-tooltip::before{bottom:-8px}.mat-mdc-tooltip-panel-right .mat-mdc-tooltip::before{left:-8px}.mat-mdc-tooltip-panel-left .mat-mdc-tooltip::before{right:-8px}.mat-mdc-tooltip._mat-animation-noopable{animation:none;transform:scale(1)}.mat-mdc-tooltip-surface{word-break:normal;overflow-wrap:anywhere;padding:4px 8px;min-width:40px;max-width:200px;min-height:24px;max-height:40vh;box-sizing:border-box;overflow:hidden;text-align:center;will-change:transform,opacity;background-color:var(--mdc-plain-tooltip-container-color, var(--mat-app-inverse-surface));color:var(--mdc-plain-tooltip-supporting-text-color, var(--mat-app-inverse-on-surface));border-radius:var(--mdc-plain-tooltip-container-shape, var(--mat-app-corner-extra-small));font-family:var(--mdc-plain-tooltip-supporting-text-font, var(--mat-app-body-small-font));font-size:var(--mdc-plain-tooltip-supporting-text-size, var(--mat-app-body-small-size));font-weight:var(--mdc-plain-tooltip-supporting-text-weight, var(--mat-app-body-small-weight));line-height:var(--mdc-plain-tooltip-supporting-text-line-height, var(--mat-app-body-small-line-height));letter-spacing:var(--mdc-plain-tooltip-supporting-text-tracking, var(--mat-app-body-small-tracking))}.mat-mdc-tooltip-surface::before{position:absolute;box-sizing:border-box;width:100%;height:100%;top:0;left:0;border:1px solid rgba(0,0,0,0);border-radius:inherit;content:\"\";pointer-events:none}.mdc-tooltip--multiline .mat-mdc-tooltip-surface{text-align:left}[dir=rtl] .mdc-tooltip--multiline .mat-mdc-tooltip-surface{text-align:right}.mat-mdc-tooltip-panel.mat-mdc-tooltip-panel-non-interactive{pointer-events:none}@keyframes mat-mdc-tooltip-show{0%{opacity:0;transform:scale(0.8)}100%{opacity:1;transform:scale(1)}}@keyframes mat-mdc-tooltip-hide{0%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(0.8)}}.mat-mdc-tooltip-show{animation:mat-mdc-tooltip-show 150ms cubic-bezier(0, 0, 0.2, 1) forwards}.mat-mdc-tooltip-hide{animation:mat-mdc-tooltip-hide 75ms cubic-bezier(0.4, 0, 1, 1) forwards}"] }]
+                    }, standalone: true, imports: [NgClass], template: "<div\n  #tooltip\n  class=\"mdc-tooltip mat-mdc-tooltip\"\n  [ngClass]=\"tooltipClass\"\n  (animationend)=\"_handleAnimationEnd($event)\"\n  [class.mdc-tooltip--multiline]=\"_isMultiline\">\n  <div class=\"mat-mdc-tooltip-surface mdc-tooltip__surface\" #container></div>\n</div>\n", styles: [".mat-mdc-tooltip{position:relative;transform:scale(0);display:inline-flex}.mat-mdc-tooltip::before{content:\"\";top:0;right:0;bottom:0;left:0;z-index:-1;position:absolute}.mat-mdc-tooltip-panel-below .mat-mdc-tooltip::before{top:-8px}.mat-mdc-tooltip-panel-above .mat-mdc-tooltip::before{bottom:-8px}.mat-mdc-tooltip-panel-right .mat-mdc-tooltip::before{left:-8px}.mat-mdc-tooltip-panel-left .mat-mdc-tooltip::before{right:-8px}.mat-mdc-tooltip._mat-animation-noopable{animation:none;transform:scale(1)}.mat-mdc-tooltip-surface{word-break:normal;overflow-wrap:anywhere;padding:4px 8px;min-width:40px;max-width:200px;min-height:24px;max-height:40vh;box-sizing:border-box;overflow:hidden;text-align:center;will-change:transform,opacity;background-color:var(--mdc-plain-tooltip-container-color, var(--mat-app-inverse-surface));color:var(--mdc-plain-tooltip-supporting-text-color, var(--mat-app-inverse-on-surface));border-radius:var(--mdc-plain-tooltip-container-shape, var(--mat-app-corner-extra-small));font-family:var(--mdc-plain-tooltip-supporting-text-font, var(--mat-app-body-small-font));font-size:var(--mdc-plain-tooltip-supporting-text-size, var(--mat-app-body-small-size));font-weight:var(--mdc-plain-tooltip-supporting-text-weight, var(--mat-app-body-small-weight));line-height:var(--mdc-plain-tooltip-supporting-text-line-height, var(--mat-app-body-small-line-height));letter-spacing:var(--mdc-plain-tooltip-supporting-text-tracking, var(--mat-app-body-small-tracking))}.mat-mdc-tooltip-surface::before{position:absolute;box-sizing:border-box;width:100%;height:100%;top:0;left:0;border:1px solid rgba(0,0,0,0);border-radius:inherit;content:\"\";pointer-events:none}.mdc-tooltip--multiline .mat-mdc-tooltip-surface{text-align:left}[dir=rtl] .mdc-tooltip--multiline .mat-mdc-tooltip-surface{text-align:right}.mat-mdc-tooltip-panel.mat-mdc-tooltip-panel-non-interactive{pointer-events:none}@keyframes mat-mdc-tooltip-show{0%{opacity:0;transform:scale(0.8)}100%{opacity:1;transform:scale(1)}}@keyframes mat-mdc-tooltip-hide{0%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(0.8)}}.mat-mdc-tooltip-show{animation:mat-mdc-tooltip-show 150ms cubic-bezier(0, 0, 0.2, 1) forwards}.mat-mdc-tooltip-hide{animation:mat-mdc-tooltip-hide 75ms cubic-bezier(0.4, 0, 1, 1) forwards}"] }]
         }], ctorParameters: () => [{ type: i0.ChangeDetectorRef }, { type: i0.ElementRef }, { type: undefined, decorators: [{
                     type: Optional
                 }, {
